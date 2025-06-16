@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pymongo
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+jinja2
+aiofiles
+httpx
+sentence-transformers
+azure-ai-documentintelligence
+requests
+azure-storage-blob
+pydantic
+json5
+python-multipart
