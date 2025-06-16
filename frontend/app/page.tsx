@@ -8,10 +8,10 @@ export default function HomePage() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
+    if (token) {
+      router.push("/dashboard");
     } else {
-      router.push("/tender-match-pro");
+      router.push("/login");
     }
   }, [router]);
 

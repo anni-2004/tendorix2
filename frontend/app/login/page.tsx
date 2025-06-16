@@ -37,7 +37,7 @@ export default function Login() {
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem("token", data.access_token);
-        router.push("/tender-match-pro");
+        router.push("/dashboard");
       } else {
         const data = await res.json();
         setError(data.detail || "Login failed. Please check your credentials.");
