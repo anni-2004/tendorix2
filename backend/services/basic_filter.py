@@ -1,15 +1,13 @@
 from pymongo import MongoClient
 from sentence_transformers import SentenceTransformer, util
 from datetime import datetime
-import os
-from dotenv import load_dotenv
+from core.database import db  # assumes your db is initialized here
 
-load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI)
-filtered_tenders = client["tender_system"]["filtered_tenders"]
-
+# Load model
 model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Collection
+filtered_tenders = db.get_collection("filtered_tenders")
 
 
 def get_company_categories(company_profile: dict):
@@ -18,23 +16,36 @@ def get_company_categories(company_profile: dict):
     """
     capability_keywords = []
 
-    caps = company_profile.get("capabilities", {})
+    # Use correct key name
+    caps = company_profile.get("businessCapabilities", {})
     for key in ["businessRoles", "industrySectors", "productServiceKeywords", "technicalCapabilities"]:
-        if caps.get(key):
-            capability_keywords.extend(caps[key].split(","))
+        val = caps.get(key)
+        if val:
+            capability_keywords.extend(val.split(","))
+        else:
+            print(f"⚠️ {key} is missing or empty.")
 
-    tenders = company_profile.get("tender_experience", {})
+    # Use correct key name for tender experience
+    tenders = company_profile.get("tenderExperience", {})
     if tenders.get("tenderTypesHandled"):
         capability_keywords.extend(tenders["tenderTypesHandled"].split(","))
+    else:
+        print("⚠️ No tenderTypesHandled provided.")
 
     # Normalize and deduplicate
     clean_categories = list({kw.strip().lower() for kw in capability_keywords if kw.strip()})
+    
+    if not clean_categories:
+        print("🚫 No valid company categories found. Aborting filtering.")
+    else:
+        print("📌 Company Category Keywords:", clean_categories)
+    
     return clean_categories
 
 
 def is_category_similar(list1, list2, threshold=0.6):
     """
-    Semantic similarity check between two category lists.
+    Semantic similarity between categories using SentenceTransformer.
     """
     for a in list1:
         for b in list2:
@@ -48,25 +59,30 @@ def is_category_similar(list1, list2, threshold=0.6):
 
 def filter_tenders(company_profile: dict):
     """
-    Filter tenders from DB based on semantic similarity to company categories.
+    Main function to filter tenders based on company profile match.
     """
     company_categories = get_company_categories(company_profile)
-    print("📌 Company Category Keywords:", company_categories)
+    if not company_categories:
+        print("🚫 No valid company categories found. Aborting filtering.\n")
+        return []
 
+    # Fetch tenders
     tenders = list(filtered_tenders.find())
-    print(f"📦 Total Tenders Fetched from DB: {len(tenders)}")
+    print(f"\n📦 Total Tenders Fetched from DB: {len(tenders)}\n")
 
     results = []
     for tender in tenders:
-        print("➡️ Tender Title:", tender.get("title"))
+        title = tender.get("title", "Untitled Tender")
+        print("➡️ Tender Title:", title)
+
         tender_categories = [cat.strip().lower() for cat in tender.get("business_category", []) if cat.strip()]
         print("   Tender Categories:", tender_categories)
 
         if is_category_similar(company_categories, tender_categories):
-            print("   ✅ Category matched")
+            print("   ✅ Category matched!\n")
             results.append(tender)
         else:
-            print("   ❌ No match")
+            print("   ❌ No match.\n")
 
-    print(f"🧮 Tenders after filtering: {len(results)}")
+    print(f"🧮 Tenders after filtering: {len(results)}\n")
     return results

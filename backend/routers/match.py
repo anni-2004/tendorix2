@@ -26,6 +26,8 @@ def get_tenders_summary(current_user: dict = Depends(get_current_user)):
     try:
         # Get user's company profile
         company = companies.find_one({"user_id": current_user["id"]})
+        print("📄 Loaded company profile:", company)
+
         if not company:
             raise HTTPException(status_code=404, detail="Company profile not found. Please complete your profile first.")
 

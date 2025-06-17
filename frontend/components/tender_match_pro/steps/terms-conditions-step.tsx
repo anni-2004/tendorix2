@@ -48,32 +48,36 @@ export const TermsConditionsStep: FC<TermsConditionsStepProps> = ({ form }) => {
       </CardHeader>
       <CardContent className="space-y-6">
         {T_AND_C_POINTS.map((point) => (
-          <FormField
-            key={point.id}
-            control={form.control}
-            name={`termsAndConditions.${point.id}`}
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    id={`termsAndConditions.${point.id}`}
-                    aria-labelledby={`label-termsAndConditions.${point.id}`}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-normal">
-                  <FormLabel htmlFor={`termsAndConditions.${point.id}`} id={`label-termsAndConditions.${point.id}`} className="font-medium cursor-pointer">
-                    {point.label}
-                  </FormLabel>
-                  <p className="text-sm text-muted-foreground">{point.text}</p>
-                  <FormMessage />
-                </div>
-              </FormItem>
-            )}
-          />
+        <FormField
+          key={point.id}
+          control={form.control}
+          name={`termsAndConditions.${point.id}`}
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  id={`termsAndConditions.${point.id}`}
+                  aria-labelledby={`label-termsAndConditions.${point.id}`}
+                />
+              </FormControl>
+              <div className="space-y-1 leading-normal">
+                <FormLabel
+                  htmlFor={`termsAndConditions.${point.id}`}
+                  id={`label-termsAndConditions.${point.id}`}
+                  className="font-medium cursor-pointer"
+                >
+                  {point.label}
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">{point.text}</p>
+              </div>
+              <FormMessage /> {/* ✅ correctly placed now */}
+            </FormItem>
+          )}
+        />
         ))}
       </CardContent>
     </Card>
-  );
-};
+    );
+  };
