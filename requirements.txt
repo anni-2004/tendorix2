@@ -14,3 +14,5 @@ azure-storage-blob
 pydantic
 json5
 python-multipart
+pdfplumber
+google-generativeai

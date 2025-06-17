@@ -5,14 +5,20 @@ from services.basic_filter import filter_tenders
 from services.eligibility_extractor import extract_eligibility_text_from_url
 from services.eligibility_parser import extract_eligibility_json_general
 from services.tender_matcher import compute_tender_match_score
+from services.summarizer import PDFSummaryService
 from routers.auth import get_current_user
 from datetime import datetime
+from tempfile import NamedTemporaryFile
 import traceback
+import requests
+import os
 
 router = APIRouter()
 
 companies = db["companies"]
 tenders = db["filtered_tenders"]
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "your_gemini_api_key_here")
 
 def serialize_tender(tender):
     """Convert ObjectId to string for JSON serialization"""
@@ -24,7 +30,6 @@ def serialize_tender(tender):
 def get_tenders_summary(current_user: dict = Depends(get_current_user)):
     """Get total and filtered tender counts"""
     try:
-        # Get user's company profile
         company = companies.find_one({"user_id": current_user["id"]})
         print("📄 Loaded company profile:", company)
 
@@ -33,8 +38,6 @@ def get_tenders_summary(current_user: dict = Depends(get_current_user)):
 
         total_tenders = tenders.count_documents({})
         filtered = filter_tenders(company)
-        
-        # Serialize filtered tenders
         serialized_filtered = [serialize_tender(t) for t in filtered]
 
         return {
@@ -51,14 +54,12 @@ def get_tenders_summary(current_user: dict = Depends(get_current_user)):
 def match_tenders(current_user: dict = Depends(get_current_user)):
     """Run tender matching pipeline"""
     try:
-        # Get user's company profile
         company = companies.find_one({"user_id": current_user["id"]})
         if not company:
             raise HTTPException(status_code=404, detail="Company profile not found. Please complete your profile first.")
 
-        # Get filtered tenders
         filtered_tenders_list = filter_tenders(company)
-        
+
         if not filtered_tenders_list:
             return {
                 "message": "No tenders match your company profile",
@@ -74,12 +75,10 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
                 continue
 
             try:
-                # Extract eligibility information
                 raw_eligibility = tender.get("raw_eligibility")
                 if not raw_eligibility:
                     raw_eligibility = extract_eligibility_text_from_url(form_url)
                     if raw_eligibility:
-                        # Update tender with extracted eligibility
                         tenders.update_one(
                             {"_id": tender["_id"]},
                             {"$set": {"raw_eligibility": raw_eligibility, "last_updated": datetime.utcnow()}}
@@ -89,13 +88,11 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
                 if not structured_eligibility:
                     structured_eligibility = extract_eligibility_json_general(raw_eligibility)
                     if structured_eligibility:
-                        # Update tender with structured eligibility
                         tenders.update_one(
                             {"_id": tender["_id"]},
                             {"$set": {"structured_eligibility": structured_eligibility, "last_updated": datetime.utcnow()}}
                         )
 
-                # Compute match score
                 result = compute_tender_match_score(structured_eligibility, company)
 
                 if result["matching_score"] >= threshold:
@@ -120,7 +117,6 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
                 print(f"Error processing tender {tender.get('title')}: {str(tender_error)}")
                 continue
 
-        # Sort by matching score (highest first)
         results.sort(key=lambda x: x["matching_score"], reverse=True)
 
         return {
@@ -135,53 +131,34 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
 
 @router.get("/tenders/{tender_id}/summarize")
 def summarize_tender(tender_id: str, current_user: dict = Depends(get_current_user)):
-    """Generate AI summary for a specific tender"""
+    """Generate Gemini AI summary for a specific tender PDF"""
     try:
-        # Get tender details
         tender = tenders.find_one({"_id": ObjectId(tender_id)})
         if not tender:
             raise HTTPException(status_code=404, detail="Tender not found")
 
-        # Create a comprehensive summary from available tender data
-        summary_parts = []
-        
-        if tender.get("title"):
-            summary_parts.append(f"Title: {tender['title']}")
-        
-        if tender.get("scope_of_work"):
-            summary_parts.append(f"Scope: {tender['scope_of_work']}")
-        elif tender.get("title"):
-            summary_parts.append(f"This tender is for {tender['title'].lower()}")
-        
-        if tender.get("location"):
-            summary_parts.append(f"Location: {tender['location']}")
-        
-        if tender.get("estimated_budget"):
-            summary_parts.append(f"Estimated Budget: ₹{tender['estimated_budget']:,}")
-        
-        if tender.get("deadline"):
-            summary_parts.append(f"Deadline: {tender['deadline']}")
-        
-        if tender.get("business_category"):
-            summary_parts.append(f"Categories: {', '.join(tender['business_category'])}")
-        
-        if tender.get("emd") and isinstance(tender["emd"], dict):
-            emd_amount = tender["emd"].get("amount")
-            if emd_amount:
-                summary_parts.append(f"EMD Amount: ₹{emd_amount:,}")
-        
-        if tender.get("documents_required"):
-            summary_parts.append(f"Required Documents: {', '.join(tender['documents_required'][:3])}{'...' if len(tender['documents_required']) > 3 else ''}")
+        form_url = tender.get("form_url")
+        if not form_url or not form_url.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Tender does not contain a valid PDF for summarization.")
 
-        # Create a comprehensive summary
-        summary = ". ".join(summary_parts) + "."
-        
-        if not summary_parts:
-            summary = "This tender contains standard procurement requirements. Please review the full document for detailed specifications and requirements."
+        # Download the PDF to a temporary file
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            response = requests.get(form_url)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to download tender PDF.")
+            tmp_file.write(response.content)
+            tmp_pdf_path = tmp_file.name
+
+        # Summarize using Gemini
+        service = PDFSummaryService(api_key=GEMINI_API_KEY)
+        summary_text = service.summarize_pdf(tmp_pdf_path)
+
+        # Clean up
+        os.remove(tmp_pdf_path)
 
         return {
             "tender_id": tender_id,
-            "summary": summary
+            "summary": summary_text.strip()
         }
 
     except Exception as e:
