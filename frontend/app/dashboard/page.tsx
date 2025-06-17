@@ -18,7 +18,8 @@ import {
   Database,
   CheckCircle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  AlertCircle
 } from "lucide-react";
 
 interface Tender {
@@ -32,6 +33,15 @@ interface Tender {
   matching_score?: number;
   eligible?: boolean;
   emd?: any;
+  estimated_budget?: number;
+  field_scores?: Record<string, number>;
+  missing_fields?: Record<string, string>;
+}
+
+interface TenderSummary {
+  total_tenders: number;
+  filtered_tenders: number;
+  filtered_list: Tender[];
 }
 
 export default function Dashboard() {
@@ -43,16 +53,16 @@ export default function Dashboard() {
   const [summarizeLoading, setSummarizeLoading] = useState("");
   
   // Data states
-  const [totalTenders, setTotalTenders] = useState(0);
-  const [filteredTenders, setFilteredTenders] = useState(0);
+  const [tenderSummary, setTenderSummary] = useState<TenderSummary | null>(null);
   const [matchedTenders, setMatchedTenders] = useState<Tender[]>([]);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
-  const [tenderSummary, setTenderSummary] = useState<string>("");
+  const [tenderSummaryText, setTenderSummaryText] = useState<string>("");
   
   // UI states
   const [showFilterResults, setShowFilterResults] = useState(false);
   const [showMatchResults, setShowMatchResults] = useState(false);
   const [showTenderDetails, setShowTenderDetails] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -93,24 +103,24 @@ export default function Dashboard() {
 
   const handleFilterTenders = async () => {
     setFilterLoading(true);
+    setError("");
     try {
-      // Mock API call - replace with actual endpoint
-      const response = await fetch("http://localhost:8000/api/tenders/filter", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:8000/api/tenders/summary", {
+        headers: { Authorization: `Bearer ${token}` },
       });
       
       if (response.ok) {
         const data = await response.json();
-        setTotalTenders(data.total || 150); // Mock data
-        setFilteredTenders(data.filtered || 45); // Mock data
+        setTenderSummary(data);
         setShowFilterResults(true);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || "Failed to filter tenders");
       }
     } catch (error) {
       console.error("Filter failed:", error);
-      // Mock data for demo
-      setTotalTenders(150);
-      setFilteredTenders(45);
-      setShowFilterResults(true);
+      setError("Network error. Please try again.");
     } finally {
       setFilterLoading(false);
     }
@@ -118,25 +128,28 @@ export default function Dashboard() {
 
   const handleMatchTenders = async () => {
     setMatchLoading(true);
+    setError("");
     try {
-      // Mock API call - replace with actual endpoint
+      const token = localStorage.getItem("token");
       const response = await fetch("http://localhost:8000/api/tenders/match", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
       
       if (response.ok) {
         const data = await response.json();
-        setMatchedTenders(data.matches || mockTenders);
+        setMatchedTenders(data.matches || []);
+        setShowMatchResults(true);
       } else {
-        // Mock data for demo
-        setMatchedTenders(mockTenders);
+        const errorData = await response.json();
+        setError(errorData.detail || "Failed to match tenders");
       }
-      setShowMatchResults(true);
     } catch (error) {
       console.error("Match failed:", error);
-      // Mock data for demo
-      setMatchedTenders(mockTenders);
-      setShowMatchResults(true);
+      setError("Network error. Please try again.");
     } finally {
       setMatchLoading(false);
     }
@@ -145,72 +158,31 @@ export default function Dashboard() {
   const handleViewTender = (tender: Tender) => {
     setSelectedTender(tender);
     setShowTenderDetails(true);
-    setTenderSummary(""); // Reset summary
+    setTenderSummaryText(""); // Reset summary
   };
 
   const handleSummarizeTender = async (tenderId: string) => {
     setSummarizeLoading(tenderId);
     try {
-      // Mock API call - replace with actual endpoint
+      const token = localStorage.getItem("token");
       const response = await fetch(`http://localhost:8000/api/tenders/${tenderId}/summarize`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       
       if (response.ok) {
         const data = await response.json();
-        setTenderSummary(data.summary);
+        setTenderSummaryText(data.summary);
       } else {
-        // Mock summary for demo
-        setTenderSummary("This tender is for maintenance of greenery at Terrace park in Circle-30, Begumpet, Secunderabad Zone, GHMC for 12 months during 2025-26. It's reserved for ST Category only with an estimated budget of ₹2,66,900. The tender requires experience in similar works and valid certifications including ESI, EPF, and Labour license.");
+        const errorData = await response.json();
+        setError(errorData.detail || "Failed to summarize tender");
       }
     } catch (error) {
       console.error("Summarize failed:", error);
-      // Mock summary for demo
-      setTenderSummary("This tender is for maintenance of greenery at Terrace park in Circle-30, Begumpet, Secunderabad Zone, GHMC for 12 months during 2025-26. It's reserved for ST Category only with an estimated budget of ₹2,66,900. The tender requires experience in similar works and valid certifications including ESI, EPF, and Labour license.");
+      setError("Network error. Please try again.");
     } finally {
       setSummarizeLoading("");
     }
   };
-
-  // Mock data for demonstration
-  const mockTenders: Tender[] = [
-    {
-      _id: "1",
-      title: "Maintenance of Greenery at Terrace park in Circle-30, Begumpet",
-      reference_number: "12/UB/2025-26",
-      location: "Secunderabad Zone, Hyderabad, Telangana",
-      business_category: ["Works", "Similar Works"],
-      deadline: "17-Jun-2025 03:30 PM",
-      form_url: "https://example.com/tender1.pdf",
-      matching_score: 85.5,
-      eligible: true,
-      emd: { amount: 6673, exemption: false }
-    },
-    {
-      _id: "2", 
-      title: "Supply of Office Equipment and Furniture",
-      reference_number: "OFF/2025/001",
-      location: "Mumbai, Maharashtra",
-      business_category: ["Supply", "Equipment"],
-      deadline: "25-Jun-2025 05:00 PM",
-      form_url: "https://example.com/tender2.pdf",
-      matching_score: 78.2,
-      eligible: true,
-      emd: { amount: 15000, exemption: false }
-    },
-    {
-      _id: "3",
-      title: "Construction of Community Center Building",
-      reference_number: "CC/2025/045",
-      location: "Pune, Maharashtra", 
-      business_category: ["Construction", "Civil Works"],
-      deadline: "30-Jun-2025 02:00 PM",
-      form_url: "https://example.com/tender3.pdf",
-      matching_score: 72.8,
-      eligible: false,
-      emd: { amount: 50000, exemption: false }
-    }
-  ];
 
   if (isLoading) {
     return (
@@ -262,6 +234,14 @@ export default function Dashboard() {
             Manage your company profile and discover relevant tender opportunities
           </p>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         {/* Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -354,7 +334,7 @@ export default function Dashboard() {
         </div>
 
         {/* Filter Results */}
-        {showFilterResults && (
+        {showFilterResults && tenderSummary && (
           <Card className="mb-8">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -365,11 +345,11 @@ export default function Dashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="text-center p-6 bg-blue-50 rounded-lg">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">{totalTenders}</div>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{tenderSummary.total_tenders}</div>
                   <div className="text-gray-600">Total Tenders in Database</div>
                 </div>
                 <div className="text-center p-6 bg-green-50 rounded-lg">
-                  <div className="text-3xl font-bold text-green-600 mb-2">{filteredTenders}</div>
+                  <div className="text-3xl font-bold text-green-600 mb-2">{tenderSummary.filtered_tenders}</div>
                   <div className="text-gray-600">Filtered Relevant Tenders</div>
                 </div>
               </div>
@@ -418,6 +398,9 @@ export default function Dashboard() {
                                 <Clock className="w-4 h-4" />
                                 <span>Deadline: {tender.deadline}</span>
                               </div>
+                            )}
+                            {tender.estimated_budget && (
+                              <div>Budget: ₹{tender.estimated_budget.toLocaleString()}</div>
                             )}
                           </div>
                         </div>
@@ -495,8 +478,11 @@ export default function Dashboard() {
                   <div>
                     <h4 className="font-semibold mb-2">Financial Details</h4>
                     <div className="space-y-2 text-sm">
-                      {selectedTender.emd && (
-                        <div><strong>EMD Amount:</strong> ₹{selectedTender.emd.amount?.toLocaleString()}</div>
+                      {selectedTender.estimated_budget && (
+                        <div><strong>Budget:</strong> ₹{selectedTender.estimated_budget.toLocaleString()}</div>
+                      )}
+                      {selectedTender.emd && typeof selectedTender.emd === 'object' && selectedTender.emd.amount && (
+                        <div><strong>EMD Amount:</strong> ₹{selectedTender.emd.amount.toLocaleString()}</div>
                       )}
                       <div className="flex items-center space-x-2">
                         <Badge variant={selectedTender.eligible ? "default" : "destructive"}>
@@ -506,6 +492,20 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Missing Fields */}
+                {selectedTender.missing_fields && Object.keys(selectedTender.missing_fields).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-red-600">Missing Requirements</h4>
+                    <div className="space-y-1 text-sm">
+                      {Object.entries(selectedTender.missing_fields).map(([field, issue]) => (
+                        <div key={field} className="text-red-600">
+                          <strong>{field}:</strong> {issue}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-3">
@@ -539,12 +539,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* Summary */}
-                {tenderSummary && (
+                {tenderSummaryText && (
                   <Alert>
                     <Sparkles className="h-4 w-4" />
                     <AlertDescription className="mt-2">
                       <strong>AI Summary:</strong><br />
-                      {tenderSummary}
+                      {tenderSummaryText}
                     </AlertDescription>
                   </Alert>
                 )}

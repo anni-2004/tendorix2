@@ -1,106 +1,188 @@
-from fastapi import APIRouter, HTTPException
-
+from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
-
-import os
-
+from core.database import db
 from services.basic_filter import filter_tenders
 from services.eligibility_extractor import extract_eligibility_text_from_url
 from services.eligibility_parser import extract_eligibility_json_general
 from services.tender_matcher import compute_tender_match_score
+from routers.auth import get_current_user
+from datetime import datetime
+import traceback
 
 router = APIRouter()
 
-
-
-from core.database import db
 companies = db["companies"]
 tenders = db["filtered_tenders"]
 
-
-# ✅ Endpoint 1: Return total + filtered counts
-from fastapi.responses import JSONResponse
-from bson import ObjectId
-
-# Helper function to convert ObjectId to string
 def serialize_tender(tender):
-    tender["_id"] = str(tender["_id"])
+    """Convert ObjectId to string for JSON serialization"""
+    if "_id" in tender:
+        tender["_id"] = str(tender["_id"])
     return tender
 
-@router.get("/match/summary")
-def get_summary(company_id: str):
+@router.get("/tenders/summary")
+def get_tenders_summary(current_user: dict = Depends(get_current_user)):
+    """Get total and filtered tender counts"""
     try:
-        company_obj_id = ObjectId(company_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid company ID format")
+        # Get user's company profile
+        company = companies.find_one({"user_id": current_user["id"]})
+        if not company:
+            raise HTTPException(status_code=404, detail="Company profile not found. Please complete your profile first.")
 
-    print("📋 Available companies in DB:")
-    for doc in companies.find({}, {"_id": 1, "companyDetails.name": 1}):
-        print(doc)
+        total_tenders = tenders.count_documents({})
+        filtered = filter_tenders(company)
+        
+        # Serialize filtered tenders
+        serialized_filtered = [serialize_tender(t) for t in filtered]
 
-    company = companies.find_one({"_id": company_obj_id})
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        return {
+            "total_tenders": total_tenders,
+            "filtered_tenders": len(serialized_filtered),
+            "filtered_list": serialized_filtered
+        }
+    except Exception as e:
+        print(f"Summary error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get tender summary: {str(e)}")
 
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+@router.post("/tenders/match")
+def match_tenders(current_user: dict = Depends(get_current_user)):
+    """Run tender matching pipeline"""
+    try:
+        # Get user's company profile
+        company = companies.find_one({"user_id": current_user["id"]})
+        if not company:
+            raise HTTPException(status_code=404, detail="Company profile not found. Please complete your profile first.")
 
-    total_tenders = tenders.count_documents({})
-    filtered = filter_tenders(company)
+        # Get filtered tenders
+        filtered_tenders_list = filter_tenders(company)
+        
+        if not filtered_tenders_list:
+            return {
+                "message": "No tenders match your company profile",
+                "matches": []
+            }
 
-    # Serialize _id fields
-    serialized_filtered = [serialize_tender(t) for t in filtered]
+        threshold = 70.0
+        results = []
 
-    return {
-        "total_tenders": total_tenders,
-        "filtered_tenders": len(serialized_filtered),
-        "filtered_list": serialized_filtered
-    }
+        for tender in filtered_tenders_list:
+            form_url = tender.get("form_url")
+            if not form_url:
+                continue
 
-@router.get("/company/list_ids")
-def list_companies():
-    company_list = companies.find({}, {"_id": 1, "companyDetails.name": 1})
-    return [{"_id": str(doc["_id"]), "name": doc.get("companyDetails", {}).get("name", "")} for doc in company_list]
+            try:
+                # Extract eligibility information
+                raw_eligibility = tender.get("raw_eligibility")
+                if not raw_eligibility:
+                    raw_eligibility = extract_eligibility_text_from_url(form_url)
+                    if raw_eligibility:
+                        # Update tender with extracted eligibility
+                        tenders.update_one(
+                            {"_id": tender["_id"]},
+                            {"$set": {"raw_eligibility": raw_eligibility, "last_updated": datetime.utcnow()}}
+                        )
 
-# ✅ Endpoint 2: Match filtered tenders
-@router.post("/match/match_tenders")
-def match_filtered_tenders(payload: dict):
-    company = payload.get("company")
-    filtered_tenders = payload.get("filtered_tenders")
+                structured_eligibility = tender.get("structured_eligibility")
+                if not structured_eligibility:
+                    structured_eligibility = extract_eligibility_json_general(raw_eligibility)
+                    if structured_eligibility:
+                        # Update tender with structured eligibility
+                        tenders.update_one(
+                            {"_id": tender["_id"]},
+                            {"$set": {"structured_eligibility": structured_eligibility, "last_updated": datetime.utcnow()}}
+                        )
 
-    if not company or not filtered_tenders:
-        raise HTTPException(status_code=400, detail="Missing data for matching")
+                # Compute match score
+                result = compute_tender_match_score(structured_eligibility, company)
 
-    threshold = 70.0  # Fixed backend threshold
+                if result["matching_score"] >= threshold:
+                    match_data = {
+                        "_id": str(tender["_id"]),
+                        "title": tender.get("title"),
+                        "reference_number": tender.get("reference_number"),
+                        "location": tender.get("location"),
+                        "business_category": tender.get("business_category", []),
+                        "deadline": tender.get("deadline"),
+                        "form_url": form_url,
+                        "matching_score": result["matching_score"],
+                        "field_scores": result["field_scores"],
+                        "eligible": result["eligible"],
+                        "missing_fields": result["missing_fields"],
+                        "emd": tender.get("emd"),
+                        "estimated_budget": tender.get("estimated_budget")
+                    }
+                    results.append(match_data)
 
-    results = []
-    for tender in filtered_tenders:
-        form_url = tender.get("form_url")
-        if not form_url:
-            continue
+            except Exception as tender_error:
+                print(f"Error processing tender {tender.get('title')}: {str(tender_error)}")
+                continue
 
-        try:
-            raw_eligibility = extract_eligibility_text_from_url(form_url)
-            print(f"📄 Raw eligibility text extracted for tender {tender.get('title')}: {raw_eligibility}")
-            structured_eligibility = extract_eligibility_json_general(raw_eligibility)
-            print(f"📄 Eligibility extracted for tender {tender.get('title')}: {structured_eligibility}")
+        # Sort by matching score (highest first)
+        results.sort(key=lambda x: x["matching_score"], reverse=True)
 
-            result = compute_tender_match_score(structured_eligibility, company)
+        return {
+            "message": f"Found {len(results)} matching tenders",
+            "matches": results
+        }
 
-            if result["matching_score"] >= threshold:
-                results.append({
-                    "title": tender.get("title"),
-                    "reference_number": tender.get("reference_number"),
-                    "form_url": form_url,
-                    "matching_score": result["matching_score"],
-                    "field_scores": result["field_scores"],
-                    "eligible": result["eligible"],
-                    "missing_fields": result["missing_fields"],
-                    "emd": tender.get("emd"),
-                    "business_category": tender.get("business_category")
-                })
+    except Exception as e:
+        print(f"Matching error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to match tenders: {str(e)}")
 
-        except Exception as e:
-            print(f"❌ Error processing tender {tender.get('title')}: {e}")
+@router.get("/tenders/{tender_id}/summarize")
+def summarize_tender(tender_id: str, current_user: dict = Depends(get_current_user)):
+    """Generate AI summary for a specific tender"""
+    try:
+        # Get tender details
+        tender = tenders.find_one({"_id": ObjectId(tender_id)})
+        if not tender:
+            raise HTTPException(status_code=404, detail="Tender not found")
 
-    return results
+        # Create a comprehensive summary from available tender data
+        summary_parts = []
+        
+        if tender.get("title"):
+            summary_parts.append(f"Title: {tender['title']}")
+        
+        if tender.get("scope_of_work"):
+            summary_parts.append(f"Scope: {tender['scope_of_work']}")
+        elif tender.get("title"):
+            summary_parts.append(f"This tender is for {tender['title'].lower()}")
+        
+        if tender.get("location"):
+            summary_parts.append(f"Location: {tender['location']}")
+        
+        if tender.get("estimated_budget"):
+            summary_parts.append(f"Estimated Budget: ₹{tender['estimated_budget']:,}")
+        
+        if tender.get("deadline"):
+            summary_parts.append(f"Deadline: {tender['deadline']}")
+        
+        if tender.get("business_category"):
+            summary_parts.append(f"Categories: {', '.join(tender['business_category'])}")
+        
+        if tender.get("emd") and isinstance(tender["emd"], dict):
+            emd_amount = tender["emd"].get("amount")
+            if emd_amount:
+                summary_parts.append(f"EMD Amount: ₹{emd_amount:,}")
+        
+        if tender.get("documents_required"):
+            summary_parts.append(f"Required Documents: {', '.join(tender['documents_required'][:3])}{'...' if len(tender['documents_required']) > 3 else ''}")
+
+        # Create a comprehensive summary
+        summary = ". ".join(summary_parts) + "."
+        
+        if not summary_parts:
+            summary = "This tender contains standard procurement requirements. Please review the full document for detailed specifications and requirements."
+
+        return {
+            "tender_id": tender_id,
+            "summary": summary
+        }
+
+    except Exception as e:
+        print(f"Summarization error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to summarize tender: {str(e)}")

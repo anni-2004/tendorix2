@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -64,7 +63,6 @@ const generateInitialTurnovers = (count: number = 10) => {
   return turnovers;
 };
 
-
 export function RegistrationWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +72,7 @@ export function RegistrationWizard() {
     companyDetails: {
       companyName: '',
       companyType: '',
-      dateOfEstablishment: new Date(), // Changed from yearOfEstablishment
+      dateOfEstablishment: new Date(),
       country: '',
       state: '',
       city: '',
@@ -129,7 +127,6 @@ export function RegistrationWizard() {
     },
   }), []);
 
-
   const methods = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     mode: 'onChange', 
@@ -152,16 +149,13 @@ export function RegistrationWizard() {
     localStorage.setItem(CURRENT_STEP_STORAGE_KEY, currentStep.toString());
   }, [currentStep]);
 
-
   const handleNext = async () => {
-    console.log(currentStep, STEPS.length);
     if (currentStep < STEPS.length - 1) {
       const currentStepFields = STEPS[currentStep].fields.slice() as (keyof RegistrationFormData)[];
       
       const fieldsToValidate: (keyof RegistrationFormData)[] | (Path<RegistrationFormData>)[] = 
         STEPS[currentStep].id === 'termsAndConditions' ? ['termsAndConditions'] :
         (currentStepFields.length > 0 ? currentStepFields as any : undefined);
-
 
       const isValid = await methods.trigger(fieldsToValidate as any);
 
@@ -187,8 +181,6 @@ export function RegistrationWizard() {
       }
     } 
     else {
-      console.log("wroking")
-      console.log(methods.getValues());
       await onSubmit(methods.getValues());
     }
   };
@@ -201,53 +193,54 @@ export function RegistrationWizard() {
 
   const onSubmit = async (data: RegistrationFormData) => {
     setIsSubmitting(true);
-    console.log("hello");
     try {
-      console.log(data);
-    const response = await fetch(`http://127.0.0.1:8000/api/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please login again to submit your profile.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (!response.ok) {
-      const errorResponse = await response.json();
-      throw new Error(errorResponse.message || 'Failed to submit registration.');
+      const response = await fetch(`http://localhost:8000/api/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorResponse = await response.json();
+        throw new Error(errorResponse.detail || 'Failed to submit registration.');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Profile Submitted!",
+        description: result.message || "Your company profile has been successfully submitted.",
+        className: "bg-green-500 text-white",
+      });
+
+      localStorage.removeItem(FORM_DATA_STORAGE_KEY);
+      localStorage.removeItem(CURRENT_STEP_STORAGE_KEY);
+      methods.reset(initialDefaultValues);
+      setCurrentStep(0);
+
+    } catch (error: any) {
+      console.error("Submission error:", error);
+      toast({
+        title: "Submission Error",
+        description: error.message || "Something went wrong while submitting your profile.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    toast({
-      title: "Profile Submitted!",
-      description: "Your company profile has been successfully submitted.",
-      className: "bg-green-500 text-white",
-    });
-
-    localStorage.removeItem(FORM_DATA_STORAGE_KEY);
-    localStorage.removeItem(CURRENT_STEP_STORAGE_KEY);
-    methods.reset(initialDefaultValues);
-    setCurrentStep(0);
-
-  } catch (error: any) {
-    toast({
-      title: "Submission Error",
-      description: error.message || "Something went wrong while submitting your profile.",
-      variant: "destructive",
-    });
-  } finally {
-    setIsSubmitting(false);
-  }
-    setIsSubmitting(false);
-    toast({
-      title: "Profile Submitted!",
-      description: "Your company profile has been successfully submitted.",
-      className: "bg-green-500 text-white", 
-    });
-    
-    localStorage.removeItem(FORM_DATA_STORAGE_KEY);
-    localStorage.removeItem(CURRENT_STEP_STORAGE_KEY);
-    methods.reset(initialDefaultValues); 
-    setCurrentStep(0); 
   };
 
   const CurrentStepComponent = STEPS[currentStep].component;
