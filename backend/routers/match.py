@@ -12,7 +12,7 @@ from tempfile import NamedTemporaryFile
 import traceback
 import requests
 import os
-
+from urllib.parse import urlparse
 router = APIRouter()
 
 companies = db["companies"]
@@ -138,8 +138,13 @@ def summarize_tender(tender_id: str, current_user: dict = Depends(get_current_us
             raise HTTPException(status_code=404, detail="Tender not found")
 
         form_url = tender.get("form_url")
-        if not form_url or not form_url.endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Tender does not contain a valid PDF for summarization.")
+        print(f"📄 Summarizing tender {tender_id} from URL: {form_url}")
+        
+
+        parsed_url = urlparse(form_url)
+        if not parsed_url.path.endswith(".pdf"):
+           raise HTTPException(status_code=400, detail="Tender does not contain a valid PDF for summarization.")
+
 
         # Download the PDF to a temporary file
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
