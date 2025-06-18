@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -32,7 +31,7 @@ interface TagInputProps {
   disabled?: boolean;
   className?: string;
   onTagAdd?: (tag: string) => void;
-  allowCreate?: boolean; // New prop
+  allowCreate?: boolean;
 }
 
 export const TagInput: React.FC<TagInputProps> = ({
@@ -46,7 +45,7 @@ export const TagInput: React.FC<TagInputProps> = ({
   disabled,
   className,
   onTagAdd,
-  allowCreate = true, // Default to true
+  allowCreate = true,
 }) => {
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -100,14 +99,13 @@ export const TagInput: React.FC<TagInputProps> = ({
   }, [availableOptions, searchQuery]);
 
   const showCreateOption = React.useMemo(() => {
-    if (!allowCreate) return false; // Check allowCreate prop
+    if (!allowCreate) return false;
     const trimmedSearch = searchQuery.trim();
     if (!trimmedSearch) return false;
     const isAlreadySelected = selectedTags.some(tag => tag.toLowerCase() === trimmedSearch.toLowerCase());
     const isExistingOriginalOption = options.some(opt => opt.toLowerCase() === trimmedSearch.toLowerCase());
     return !isAlreadySelected && !isExistingOriginalOption;
-  }, [searchQuery, selectedTags, options, allowCreate]); // Add allowCreate to dependencies
-
+  }, [searchQuery, selectedTags, options, allowCreate]);
 
   return (
     <div className={cn("w-full", className)}>
@@ -123,29 +121,29 @@ export const TagInput: React.FC<TagInputProps> = ({
           disabled={disabled}
           className={cn(
             buttonVariants({ variant: "outline" }),
-            "w-full justify-between h-auto min-h-10 py-2 px-3 text-left font-normal hover:bg-background disabled:opacity-50 disabled:cursor-not-allowed"
+            "w-full justify-between h-auto min-h-10 py-2 px-3 text-left font-normal hover:bg-background disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-ring focus:ring-offset-2"
           )}
           id={id}
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
           type="button"
-          onClick={() => !disabled && setOpen(true)}
+          onClick={() => !disabled && setOpen(!open)}
         >
           {selectedTags.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 max-w-full">
               {selectedTags.map(tag => (
                 <Badge
                   variant="secondary"
                   key={tag}
-                  className="py-1 px-2 rounded-sm"
+                  className="py-1 px-2 rounded-sm max-w-full"
                 >
-                  {tag}
+                  <span className="truncate">{tag}</span>
                   <span
                     role="button"
                     tabIndex={disabled ? -1 : 0}
                     className={cn(
                       "ml-1.5 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                      disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                      disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-secondary-foreground/20"
                     )}
                     onClick={(e) => {
                       if (disabled) return;
@@ -168,9 +166,9 @@ export const TagInput: React.FC<TagInputProps> = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </PopoverTrigger>
         <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0"
-            align="start"
-            style={{ width: triggerRef.current?.offsetWidth ? `${triggerRef.current.offsetWidth}px` : 'auto' }}
+          className="w-[--radix-popover-trigger-width] p-0 max-h-80"
+          align="start"
+          style={{ width: triggerRef.current?.offsetWidth ? `${triggerRef.current.offsetWidth}px` : 'auto' }}
         >
           <Command shouldFilter={false}>
             <CommandInput
@@ -178,6 +176,7 @@ export const TagInput: React.FC<TagInputProps> = ({
               value={searchQuery}
               onValueChange={setSearchQuery}
               disabled={disabled}
+              className="h-9"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) { 
                   const trimmedSearch = searchQuery.trim();
@@ -198,7 +197,7 @@ export const TagInput: React.FC<TagInputProps> = ({
                       handleSelect(availableOptionMatch);
                     } else {
                       const isExistingInOriginalOptions = options.some(opt => opt.toLowerCase() === trimmedSearch.toLowerCase());
-                      if (allowCreate && !isExistingInOriginalOptions) { // Check allowCreate here
+                      if (allowCreate && !isExistingInOriginalOptions) {
                         e.preventDefault();
                         handleSelect(trimmedSearch);
                       }
@@ -207,7 +206,7 @@ export const TagInput: React.FC<TagInputProps> = ({
                 }
               }}
             />
-            <CommandList>
+            <CommandList className="max-h-60 overflow-y-auto">
               <CommandEmpty>
                 {searchQuery.trim() && !showCreateOption ? "No matching items found." : (allowCreate ? "Type to search or add new." : "Type to search.")}
               </CommandEmpty>
@@ -218,6 +217,7 @@ export const TagInput: React.FC<TagInputProps> = ({
                     value={option}
                     onSelect={() => handleSelect(option)}
                     disabled={disabled}
+                    className="cursor-pointer hover:bg-accent"
                   >
                     {option}
                   </CommandItem>
@@ -228,7 +228,7 @@ export const TagInput: React.FC<TagInputProps> = ({
                     value={searchQuery.trim()}
                     onSelect={() => handleSelect(searchQuery.trim())}
                     disabled={disabled}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 aria-selected:bg-accent aria-selected:text-accent-foreground"
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
                   >
                     Add "{searchQuery.trim()}"
                   </CommandItem>

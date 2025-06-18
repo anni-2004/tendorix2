@@ -16,6 +16,7 @@ import {
 } from '@/lib/schemas/registration-schema';
 import { useFormPersistence } from '@/hooks/use-form-persistence';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 import { Progress } from '@/components/ui/progress';
 import { FormNavigation } from './form-navigation';
@@ -66,7 +67,10 @@ const generateInitialTurnovers = (count: number = 10) => {
 export function RegistrationWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [existingProfile, setExistingProfile] = useState<any>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   const initialDefaultValues = useMemo<RegistrationFormData>(() => ({
     companyDetails: {
@@ -132,6 +136,112 @@ export function RegistrationWizard() {
     mode: 'onChange', 
     defaultValues: initialDefaultValues,
   });
+
+  // Check for existing profile on component mount
+  useEffect(() => {
+    const checkExistingProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const response = await fetch("http://localhost:8000/api/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const profile = await response.json();
+          setExistingProfile(profile);
+          
+          // Convert the profile data to form format
+          const formData: RegistrationFormData = {
+            companyDetails: {
+              companyName: profile.companyDetails?.companyName || '',
+              companyType: profile.companyDetails?.companyType || '',
+              dateOfEstablishment: profile.companyDetails?.dateOfEstablishment 
+                ? new Date(profile.companyDetails.dateOfEstablishment) 
+                : new Date(),
+              country: profile.companyDetails?.country || '',
+              state: profile.companyDetails?.state || '',
+              city: profile.companyDetails?.city || '',
+              address: profile.companyDetails?.address || '',
+              websiteUrl: profile.companyDetails?.websiteUrl || ''
+            },
+            businessCapabilities: {
+              businessRoles: profile.businessCapabilities?.businessRoles || '',
+              industrySectors: profile.businessCapabilities?.industrySectors || '',
+              productServiceKeywords: profile.businessCapabilities?.productServiceKeywords || '',
+              technicalCapabilities: profile.businessCapabilities?.technicalCapabilities || '',
+              certifications: profile.businessCapabilities?.certifications || '',
+              hasNoCertifications: profile.businessCapabilities?.hasNoCertifications || false,
+            },
+            financialLegalInfo: {
+              hasPan: profile.financialLegalInfo?.hasPan || false,
+              hasGstin: profile.financialLegalInfo?.hasGstin || false,
+              hasMsmeUdyam: profile.financialLegalInfo?.hasMsmeUdyam || false,
+              hasNsic: profile.financialLegalInfo?.hasNsic || false,
+              annualTurnovers: profile.financialLegalInfo?.annualTurnovers || generateInitialTurnovers(10),
+              netWorthAmount: profile.financialLegalInfo?.netWorthAmount || '',
+              netWorthCurrency: profile.financialLegalInfo?.netWorthCurrency || '',
+              isBlacklistedOrLitigation: profile.financialLegalInfo?.isBlacklistedOrLitigation || false,
+              blacklistedDetails: profile.financialLegalInfo?.blacklistedDetails || ''
+            },
+            tenderExperience: {
+              suppliedToGovtPsus: profile.tenderExperience?.suppliedToGovtPsus || false,
+              hasPastClients: profile.tenderExperience?.hasPastClients || false,
+              pastClients: profile.tenderExperience?.pastClients || '',
+              highestOrderValueFulfilled: profile.tenderExperience?.highestOrderValueFulfilled || 0,
+              tenderTypesHandled: profile.tenderExperience?.tenderTypesHandled || ''
+            },
+            geographicDigitalReach: {
+              operatesInMultipleStates: profile.geographicDigitalReach?.operatesInMultipleStates || false,
+              operationalStates: profile.geographicDigitalReach?.operationalStates || '',
+              exportsToOtherCountries: profile.geographicDigitalReach?.exportsToOtherCountries || false,
+              countriesServed: profile.geographicDigitalReach?.countriesServed || '',
+              hasImportLicense: profile.geographicDigitalReach?.hasImportLicense || false,
+              hasExportLicense: profile.geographicDigitalReach?.hasExportLicense || false,
+              registeredOnPortals: profile.geographicDigitalReach?.registeredOnPortals || false,
+              hasDigitalSignature: profile.geographicDigitalReach?.hasDigitalSignature || false,
+              preferredTenderLanguages: profile.geographicDigitalReach?.preferredTenderLanguages || ''
+            },
+            termsAndConditions: {
+              acknowledgmentOfTenderMatching: profile.termsAndConditions?.acknowledgmentOfTenderMatching || false,
+              accuracyOfSharedCompanyProfile: profile.termsAndConditions?.accuracyOfSharedCompanyProfile || false,
+              noResponsibilityForTenderOutcomes: profile.termsAndConditions?.noResponsibilityForTenderOutcomes || false,
+              nonDisclosureAndLimitedUse: profile.termsAndConditions?.nonDisclosureAndLimitedUse || false,
+            },
+            declarationsUploads: {
+              infoConfirmed: profile.declarationsUploads?.infoConfirmed || false,
+            },
+          };
+
+          // Reset form with existing data
+          methods.reset(formData);
+          
+          toast({
+            title: "Profile Loaded",
+            description: "Your existing profile has been loaded for editing.",
+            className: "bg-blue-500 text-white",
+          });
+        } else if (response.status !== 404) {
+          throw new Error("Failed to check profile");
+        }
+      } catch (error) {
+        console.error("Error checking profile:", error);
+        toast({
+          title: "Profile Check Failed",
+          description: "Could not load existing profile. Starting fresh.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkExistingProfile();
+  }, [methods, router, toast]);
 
   useFormPersistence(methods, FORM_DATA_STORAGE_KEY, initialDefaultValues);
 
@@ -221,15 +331,16 @@ export function RegistrationWizard() {
       const result = await response.json();
 
       toast({
-        title: "Profile Submitted!",
-        description: result.message || "Your company profile has been successfully submitted.",
+        title: existingProfile ? "Profile Updated!" : "Profile Submitted!",
+        description: result.message || `Your company profile has been successfully ${existingProfile ? 'updated' : 'submitted'}.`,
         className: "bg-green-500 text-white",
       });
 
       localStorage.removeItem(FORM_DATA_STORAGE_KEY);
       localStorage.removeItem(CURRENT_STEP_STORAGE_KEY);
-      methods.reset(initialDefaultValues);
-      setCurrentStep(0);
+      
+      // Redirect to dashboard
+      router.push("/dashboard");
 
     } catch (error: any) {
       console.error("Submission error:", error);
@@ -243,25 +354,61 @@ export function RegistrationWizard() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   const CurrentStepComponent = STEPS[currentStep].component;
   const progressValue = ((currentStep + 1) / STEPS.length) * 100;
 
   return (
-    <FormProvider {...methods}>
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-8 w-full">
-        <Progress value={progressValue} className="w-full mb-6 h-3" />
+    <div className="w-full max-w-4xl mx-auto">
+      {existingProfile && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs">✓</span>
+            </div>
+            <span className="text-blue-800 font-medium">
+              Editing existing profile for {existingProfile.companyDetails?.companyName || 'your company'}
+            </span>
+          </div>
+        </div>
+      )}
 
-        <CurrentStepComponent form={methods} />
+      <FormProvider {...methods}>
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-8 w-full">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700">
+                Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep].title}
+              </span>
+              <span className="text-sm text-gray-500">
+                {Math.round(progressValue)}% Complete
+              </span>
+            </div>
+            <Progress value={progressValue} className="w-full h-3 bg-gray-200" />
+          </div>
 
-        <FormNavigation
-          currentStep={currentStep}
-          totalSteps={STEPS.length}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-          isNextDisabled={methods.formState.isSubmitting || (currentStep === STEPS.length -1 && !methods.formState.isValid && methods.formState.isSubmitted) }
-          isSubmitting={isSubmitting}
-        />
-      </form>
-    </FormProvider>
+          <CurrentStepComponent form={methods} />
+
+          <FormNavigation
+            currentStep={currentStep}
+            totalSteps={STEPS.length}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            isNextDisabled={methods.formState.isSubmitting || (currentStep === STEPS.length -1 && !methods.formState.isValid && methods.formState.isSubmitted) }
+            isSubmitting={isSubmitting}
+          />
+        </form>
+      </FormProvider>
+    </div>
   );
 }
