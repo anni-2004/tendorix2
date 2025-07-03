@@ -38,7 +38,7 @@ def upload_to_blob(file_path: str) -> str:
             blob_name=filename,
             account_key=AZURE_ACCOUNT_KEY,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.utcnow() + timedelta(days=7),
+            expiry=datetime.utcnow() + timedelta(days=365),
         )
 
         # Construct SAS URL
@@ -48,3 +48,4 @@ def upload_to_blob(file_path: str) -> str:
     except Exception as e:
         print(f"❌ Upload failed for {file_path}: {e}")
         return None
+    

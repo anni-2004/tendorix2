@@ -93,7 +93,7 @@ def compute_tender_match_score(eligibility: dict, company: dict):
     # Final score calculation
     final_score = round((score / total_weight) * 100, 2) if total_weight else 0
     eligible = final_score >= 70 and not missing_fields
-
+    print(final_score)
     return {
         "matching_score": final_score,
         "eligible": eligible,

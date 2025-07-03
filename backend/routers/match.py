@@ -66,7 +66,7 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
                 "matches": []
             }
 
-        threshold = 70.0
+        threshold = 60.0
         results = []
 
         for tender in filtered_tenders_list:
@@ -87,6 +87,7 @@ def match_tenders(current_user: dict = Depends(get_current_user)):
                 structured_eligibility = tender.get("structured_eligibility")
                 if not structured_eligibility:
                     structured_eligibility = extract_eligibility_json_general(raw_eligibility)
+                    
                     if structured_eligibility:
                         tenders.update_one(
                             {"_id": tender["_id"]},

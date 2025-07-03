@@ -1,59 +1,36 @@
-import os
 import requests
-import json5
 import json
-from dotenv import load_dotenv
 
-load_dotenv()
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+def query_self_hosted_zephyr(prompt: str) -> str:
+    API_URL = "http://34.60.71.140:8000/search"  # Replace with your actual IP:port if different
 
-def query_hf_zephyr(prompt: str) -> str:
-    url = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-    headers = {
-        "Authorization": f"Bearer {HF_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "temperature": 0.3,
-            "max_new_tokens": 768,
-            "return_full_text": False
-        }
+        "prompt": prompt,
+        "max_tokens": 768  # You can adjust this as your server allows
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code != 200:
-        raise Exception(f"HF API error {response.status_code}: {response.text}")
-
-    output = response.json()
-    if isinstance(output, list) and "generated_text" in output[0]:
-        return output[0]["generated_text"]
-    elif isinstance(output, dict) and "generated_text" in output:
-        return output["generated_text"]
-    return ""
+    try:
+        response = requests.post(API_URL, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "")
+    except requests.RequestException as e:
+        print(f"❌ Request failed: {e}")
+        return ""
 
 def extract_first_json_object(text: str) -> dict:
-    """
-    Attempts to extract and parse the first valid JSON object from a string.
-    """
-    # Remove markdown wrappers like ```json ... ```
     if "```json" in text:
         text = text.split("```json", 1)[1].split("```", 1)[0].strip()
     elif "```" in text:
         text = text.split("```", 1)[1].split("```", 1)[0].strip()
 
-    # Remove duplicate keys if needed — Zephyr sometimes repeats key blocks
-    # Optional: Basic fix for missing commas (best effort)
     text = text.replace("}\n{", "},\n{").replace("}\n\"", "},\n\"")
 
-    # Try parsing full text as JSON
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Try extracting the first JSON-like block manually
     start = None
     depth = 0
     for i, ch in enumerate(text):
@@ -95,7 +72,7 @@ Eligibility Criteria Text:
 
 Respond only with the JSON.
 """
-    zephyr_response = query_hf_zephyr(prompt)
+    zephyr_response = query_self_hosted_zephyr(prompt)
     print("📄 Raw Zephyr output:\n", zephyr_response)
     parsed = extract_first_json_object(zephyr_response)
     print("✅ Final Parsed Output:\n", json.dumps(parsed, indent=2))
