@@ -1,18 +1,17 @@
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
 
-# Load once (lightweight model)
+# Load lightweight model for field mapping
 model = SentenceTransformer('all-MiniLM-L6-v2')
-
 
 def map_fields_by_embedding(gemini_fields: list, backend_fields: list, backend_data: dict, threshold: float = 0.5):
     """
-    Maps Gemini schema fields to backend data fields using embedding similarity.
+    Maps template fields to backend data fields using embedding similarity.
 
     Parameters:
-    - gemini_fields: List of field dicts from Gemini schema
-    - backend_fields: List of backend keys (from MongoDB/document)
-    - backend_data: Full backend dict (one tender document)
+    - gemini_fields: List of field dicts from template schema
+    - backend_fields: List of backend keys (from tender data)
+    - backend_data: Full backend dict (tender document)
     - threshold: Minimum similarity required to map
 
     Returns: dict with mapped values
@@ -26,7 +25,7 @@ def map_fields_by_embedding(gemini_fields: list, backend_fields: list, backend_d
         field_id = field['id']
         label = field.get('label', field_id)
 
-        # Embed Gemini label/id
+        # Embed template field label/id
         query_embedding = model.encode(label, convert_to_tensor=True)
 
         # Compute cosine similarities

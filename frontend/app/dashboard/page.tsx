@@ -25,7 +25,8 @@ import {
   TrendingUp,
   Calendar,
   MapPin,
-  DollarSign
+  DollarSign,
+  PenTool
 } from "lucide-react";
 
 interface Tender {
@@ -154,6 +155,10 @@ export default function Dashboard() {
 
   const handleProfileAction = () => {
     router.push("/tender-match-pro");
+  };
+
+  const handleTenderDraft = () => {
+    router.push("/tender-draft");
   };
 
   const handleFilterTenders = async () => {
@@ -392,7 +397,7 @@ export default function Dashboard() {
         )}
 
         {/* Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Filter Tenders Card */}
           <Card className="hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardHeader className="pb-4">
@@ -470,6 +475,31 @@ export default function Dashboard() {
                   Complete your profile to enable this feature
                 </p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* TenderDraft Card */}
+          <Card className="hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center space-x-3 text-green-800">
+                <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                  <PenTool className="w-5 h-5 text-white" />
+                </div>
+                <span>TenderDraft</span>
+              </CardTitle>
+              <CardDescription className="text-green-600">
+                Generate professional tender documents with AI-powered template processing
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={handleTenderDraft}
+                className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md"
+                size="lg"
+              >
+                <PenTool className="w-5 h-5 mr-2" />
+                Create Documents
+              </Button>
             </CardContent>
           </Card>
         </div>

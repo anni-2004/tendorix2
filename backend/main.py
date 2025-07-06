@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # Import routers
-from routers import upload, company, match, profile, auth
+from routers import upload, company, match, profile, auth, docgen
 
 app = FastAPI(title="Tendorix API", version="1.0.0")
 
@@ -35,6 +35,7 @@ app.include_router(profile.router, prefix="/api", tags=["Profile"])
 app.include_router(match.router, prefix="/api", tags=["Matching"])
 app.include_router(company.router, prefix="/api", tags=["Company"])
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
+app.include_router(docgen.router, prefix="/api/docgen", tags=["Document Generation"])
 
 @app.get("/")
 def root():
@@ -45,6 +46,7 @@ def root():
             "auth": "/api/auth",
             "profile": "/api",
             "matching": "/api",
+            "docgen": "/api/docgen",
             "docs": "/docs"
         }
     }
