@@ -10,9 +10,11 @@ MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 if not MONGO_URI or not MONGO_DB_NAME:
     raise Exception("MongoDB environment variables not set properly")
 
+# Initialize MongoDB client
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB_NAME]
 
-# Specific collections
-profiles= db.get_collection("companies")  # for company profiles
-tenders = db.get_collection("filtered_tenders")  # for tenders
+# Collections
+profiles = db.get_collection("companies")
+tenders = db.get_collection("filtered_tenders")
+users = db.get_collection("users")

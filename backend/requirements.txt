@@ -1,21 +1,42 @@
-fastapi
-uvicorn[standard]
+# Core Framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# Database
 pymongo
-python-dotenv
+
+# Authentication & Security
 passlib[bcrypt]
 python-jose[cryptography]
-jinja2
-aiofiles
-httpx
+
+# Environment & Configuration
+python-dotenv
+
+# AI & ML Services
 sentence-transformers
 azure-ai-documentintelligence
-requests
-azure-storage-blob
-pydantic
-json5
-python-multipart
-pdfplumber
 google-generativeai
-docxtpl
+
+# Document Processing
 python-docx==1.1.0
+pdfplumber
+docxtpl
+
+# HTTP & API
+httpx
+requests
+aiofiles
+
+# Data Processing
+pydantic==2.7.1
+json5
 rapidfuzz
+
+# File Upload
+python-multipart
+
+# Template Engine
+jinja2
+
+# Storage
+azure-storage-blob
