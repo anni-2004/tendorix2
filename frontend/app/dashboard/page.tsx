@@ -87,6 +87,9 @@ export default function Dashboard() {
   const [showMatchResults, setShowMatchResults] = useState(false);
   const [showTenderDetails, setShowTenderDetails] = useState(false);
   const [error, setError] = useState("");
+  
+  // New state to track if filtering has been completed
+  const [hasFilteredTenders, setHasFilteredTenders] = useState(false);
 
   const checkProfile = async () => {
     setProfileLoading(true);
@@ -169,6 +172,10 @@ export default function Dashboard() {
 
     setFilterLoading(true);
     setError("");
+    setHasFilteredTenders(false); // Reset the filtered state
+    setShowMatchResults(false); // Hide previous match results
+    setMatchedTenders([]); // Clear previous matches
+    
     try {
       const token = localStorage.getItem("token");
       const response = await fetch("http://localhost:8000/api/tenders/summary", {
@@ -179,6 +186,7 @@ export default function Dashboard() {
         const data = await response.json();
         setTenderSummary(data);
         setShowFilterResults(true);
+        setHasFilteredTenders(true); // Mark that filtering has been completed
       } else {
         const errorData = await response.json();
         setError(errorData.detail || "Failed to filter tenders");
@@ -194,6 +202,11 @@ export default function Dashboard() {
   const handleMatchTenders = async () => {
     if (!hasProfile) {
       setError("Please complete your company profile first to match tenders.");
+      return;
+    }
+
+    if (!hasFilteredTenders) {
+      setError("Please filter tenders first before running the matching algorithm.");
       return;
     }
 
@@ -438,24 +451,39 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Match Tenders Card */}
-          <Card className="hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+          {/* Match Tenders Card - Only show if filtering has been completed */}
+          <Card className={`hover:shadow-xl transition-all duration-300 border-0 shadow-lg ${
+            hasFilteredTenders 
+              ? 'bg-gradient-to-br from-purple-50 to-purple-100' 
+              : 'bg-gradient-to-br from-gray-50 to-gray-100'
+          }`}>
             <CardHeader className="pb-4">
-              <CardTitle className="flex items-center space-x-3 text-purple-800">
-                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+              <CardTitle className={`flex items-center space-x-3 ${
+                hasFilteredTenders ? 'text-purple-800' : 'text-gray-500'
+              }`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  hasFilteredTenders ? 'bg-purple-600' : 'bg-gray-400'
+                }`}>
                   <Target className="w-5 h-5 text-white" />
                 </div>
                 <span>Match Tenders</span>
               </CardTitle>
-              <CardDescription className="text-purple-600">
-                Run AI-powered matching to find the most relevant tender opportunities
+              <CardDescription className={hasFilteredTenders ? 'text-purple-600' : 'text-gray-500'}>
+                {hasFilteredTenders 
+                  ? 'Run AI-powered matching to find the most relevant tender opportunities'
+                  : 'Filter tenders first to enable AI-powered matching'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button 
                 onClick={handleMatchTenders}
-                disabled={matchLoading || !hasProfile}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-md"
+                disabled={matchLoading || !hasProfile || !hasFilteredTenders}
+                className={`w-full shadow-md ${
+                  hasFilteredTenders 
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                    : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                }`}
                 size="lg"
               >
                 {matchLoading ? (
@@ -473,6 +501,11 @@ export default function Dashboard() {
               {!hasProfile && (
                 <p className="text-xs text-purple-500 mt-2 text-center">
                   Complete your profile to enable this feature
+                </p>
+              )}
+              {hasProfile && !hasFilteredTenders && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Filter tenders first to enable matching
                 </p>
               )}
             </CardContent>
@@ -529,6 +562,21 @@ export default function Dashboard() {
                   <div className="text-sm text-green-500 mt-1">Filtered based on your profile</div>
                 </div>
               </div>
+              
+              {/* Show next step hint */}
+              {hasFilteredTenders && !showMatchResults && (
+                <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <Target className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <p className="text-purple-800 font-medium">Ready for AI Matching!</p>
+                      <p className="text-purple-600 text-sm">
+                        Now you can run the AI-powered matching algorithm to find the most relevant tenders for your business.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
