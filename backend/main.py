@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers
-from routers import auth, profile, match, company, docgen
+from routers import auth, profile, match, company, docgen, upload
 
 app = FastAPI(
     title="Tendorix API", 
@@ -25,6 +25,7 @@ app.include_router(profile.router, prefix="/api", tags=["Profile"])
 app.include_router(match.router, prefix="/api", tags=["Matching"])
 app.include_router(company.router, prefix="/api", tags=["Company"])
 app.include_router(docgen.router, prefix="/api/docgen", tags=["Document Generation"])
+app.include_router(upload.router, prefix="/api/upload", tags=["Upload & File Management"])
 
 @app.get("/")
 def root():
