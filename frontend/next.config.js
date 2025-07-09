@@ -1,17 +1,32 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['placehold.co'],
-  },
-}
-module.exports = {
-  images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'placehold.co',
       },
     ],
+  },
+  // Suppress hydration warnings in development
+  reactStrictMode: true,
+  // Optimize for better hydration
+  swcMinify: true,
+  // Experimental features for better hydration
+  experimental: {
+    optimizeCss: true,
+  },
+  // Webpack configuration for better client-server consistency
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
   },
 };
 

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import type { UseFormReturn, FieldValues, Path, PathValue } from 'react-hook-form';
 
 export function useFormPersistence<T extends FieldValues>(
@@ -9,9 +9,16 @@ export function useFormPersistence<T extends FieldValues>(
   storageKey: string,
   initialDefaultValuesFromProps: T // Accept memoized default values as a prop
 ) {
+  const [isMounted, setIsMounted] = useState(false);
   const { watch, reset, setValue, getValues, formState: { isSubmitSuccessful } } = form;
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const loadFromStorage = useCallback(() => {
+    if (!isMounted) return;
+
     const storedDataString = localStorage.getItem(storageKey);
     if (storedDataString) {
       try {
@@ -46,28 +53,32 @@ export function useFormPersistence<T extends FieldValues>(
         reset(initialDefaultValuesFromProps);
       }
     }
-  }, [reset, storageKey, initialDefaultValuesFromProps]); // Depend on the passed-in stable initialDefaultValuesFromProps
+  }, [reset, storageKey, initialDefaultValuesFromProps, isMounted]);
 
   useEffect(() => {
     loadFromStorage();
   }, [loadFromStorage]); 
 
   useEffect(() => {
+    if (!isMounted) return;
+
     const subscription = watch((value) => {
       if (!form.formState.isSubmitting && !form.formState.isSubmitSuccessful) {
         localStorage.setItem(storageKey, JSON.stringify(value));
       }
     });
     return () => subscription.unsubscribe();
-  }, [watch, storageKey, form.formState.isSubmitting, form.formState.isSubmitSuccessful]);
+  }, [watch, storageKey, form.formState.isSubmitting, form.formState.isSubmitSuccessful, isMounted]);
 
   useEffect(() => {
+    if (!isMounted) return;
+
     if (isSubmitSuccessful) {
       localStorage.removeItem(storageKey);
       if (initialDefaultValuesFromProps) {
         reset(initialDefaultValuesFromProps);
       }
     }
-  }, [isSubmitSuccessful, storageKey, reset, initialDefaultValuesFromProps]); // Depend on the passed-in stable initialDefaultValuesFromProps
+  }, [isSubmitSuccessful, storageKey, reset, initialDefaultValuesFromProps, isMounted]);
 }
 

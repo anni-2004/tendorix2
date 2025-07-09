@@ -68,6 +68,7 @@ interface AutoMappingResult {
 export default function TenderDraftPage() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   // Step management
@@ -91,6 +92,12 @@ export default function TenderDraftPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -120,7 +127,7 @@ export default function TenderDraftPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, isMounted]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -130,6 +137,11 @@ export default function TenderDraftPage() {
   const handleBackToDashboard = () => {
     router.push("/dashboard");
   };
+
+  // Prevent hydration mismatch
+  if (!isMounted) {
+    return null;
+  }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

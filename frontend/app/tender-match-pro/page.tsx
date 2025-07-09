@@ -10,9 +10,16 @@ import { Toaster } from '@/components/ui/toaster';
 export default function TenderMatchProPage() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -42,7 +49,7 @@ export default function TenderMatchProPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, isMounted]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -52,6 +59,11 @@ export default function TenderMatchProPage() {
   const handleBackToDashboard = () => {
     router.push("/dashboard");
   };
+
+  // Prevent hydration mismatch
+  if (!isMounted) {
+    return null;
+  }
 
   if (isLoading) {
     return (

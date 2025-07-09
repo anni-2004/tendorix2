@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useForm, FormProvider, Path } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -67,6 +68,7 @@ const generateInitialTurnovers = (count: number = 10) => {
 export function RegistrationWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [existingProfile, setExistingProfile] = useState<any>(null);
   const { toast } = useToast();
@@ -139,6 +141,12 @@ export function RegistrationWizard() {
 
   // Check for existing profile on component mount
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const checkExistingProfile = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -241,7 +249,7 @@ export function RegistrationWizard() {
     };
 
     checkExistingProfile();
-  }, [methods, router, toast]);
+  }, [methods, router, toast, isMounted]);
 
   useFormPersistence(methods, FORM_DATA_STORAGE_KEY, initialDefaultValues);
 
@@ -258,6 +266,11 @@ export function RegistrationWizard() {
   useEffect(() => {
     localStorage.setItem(CURRENT_STEP_STORAGE_KEY, currentStep.toString());
   }, [currentStep]);
+
+  // Prevent hydration mismatch
+  if (!isMounted) {
+    return null;
+  }
 
   const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {

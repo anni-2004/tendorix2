@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,7 @@ interface CompanyProfile {
 export default function Dashboard() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false);
   const [matchLoading, setMatchLoading] = useState(false);
@@ -92,6 +94,11 @@ export default function Dashboard() {
   const [hasFilteredTenders, setHasFilteredTenders] = useState(false);
 
   const checkProfile = async () => {
+    // Ensure we're on the client side
+    if (!isMounted) {
+      return;
+    }
+
     setProfileLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -119,6 +126,12 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -149,7 +162,7 @@ export default function Dashboard() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, isMounted]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -159,6 +172,11 @@ export default function Dashboard() {
   const handleProfileAction = () => {
     router.push("/tender-match-pro");
   };
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!isMounted) {
+    return null;
+  }
 
   const handleTenderDraft = () => {
     router.push("/tender-draft");
