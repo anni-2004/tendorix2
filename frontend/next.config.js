@@ -12,9 +12,9 @@ const nextConfig = {
   reactStrictMode: true,
   // Optimize for better hydration
   swcMinify: true,
-  // Experimental features for better hydration
+  // Remove experimental optimizeCss that requires critters
   experimental: {
-    optimizeCss: true,
+    // optimizeCss: true, // Removed this line
   },
   // Webpack configuration for better client-server consistency
   webpack: (config, { isServer }) => {
