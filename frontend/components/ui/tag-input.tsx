@@ -109,6 +109,20 @@ export const TagInput: React.FC<TagInputProps> = ({
     return !isAlreadySelected && !isExistingOriginalOption;
   }, [searchQuery, selectedTags, options, allowCreate]);
 
+  // Handle button click to toggle dropdown
+  const handleButtonClick = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled) {
+      setOpen(prev => !prev);
+    }
+  }, [disabled]);
+
+  // Handle command item selection
+  const handleCommandItemSelect = React.useCallback((option: string) => {
+    handleSelect(option);
+  }, [handleSelect]);
+
   return (
     <div className={cn("w-full", className)}>
       <Popover open={open} onOpenChange={setOpen}>
@@ -128,6 +142,7 @@ export const TagInput: React.FC<TagInputProps> = ({
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
             type="button"
+            onClick={handleButtonClick}
           >
             {selectedTags.length > 0 ? (
               <div className="flex flex-wrap gap-1 max-w-full">
@@ -167,10 +182,12 @@ export const TagInput: React.FC<TagInputProps> = ({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0 max-h-80"
+          className="w-[--radix-popover-trigger-width] p-0 max-h-80 z-[200]"
           align="start"
+          side="bottom"
+          sideOffset={4}
         >
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search or type to add..."
               value={searchQuery}
@@ -215,13 +232,11 @@ export const TagInput: React.FC<TagInputProps> = ({
                     <CommandItem
                       key={option}
                       value={option}
-                      onSelect={() => {
-                        // Direct call to handleSelect with the original option
-                        handleSelect(option);
-                      }}
+                      onSelect={() => handleCommandItemSelect(option)}
                       disabled={disabled || isSelected}
                       className={cn(
                         "cursor-pointer hover:bg-accent flex items-center justify-between",
+                        "data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
                         isSelected && "opacity-50"
                       )}
                     >
@@ -234,9 +249,9 @@ export const TagInput: React.FC<TagInputProps> = ({
                   <CommandItem
                     key={`create-${searchQuery.trim()}`}
                     value={searchQuery.trim()}
-                    onSelect={() => handleSelect(searchQuery.trim())}
+                    onSelect={() => handleCommandItemSelect(searchQuery.trim())}
                     disabled={disabled}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer"
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer data-[selected=true]:bg-accent/90"
                   >
                     <span>Add "{searchQuery.trim()}"</span>
                   </CommandItem>

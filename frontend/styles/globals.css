@@ -90,3 +90,24 @@
     transform: rotate(360deg);
   }
 }
+
+/* Fix for TagInput dropdown z-index issues */
+[data-radix-popper-content-wrapper] {
+  z-index: 200 !important;
+}
+
+/* Ensure command items are clickable */
+[cmdk-item] {
+  cursor: pointer !important;
+}
+
+[cmdk-item]:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+/* Fix for popover positioning */
+.tag-input-popover {
+  z-index: 200;
+  position: relative;
+}
