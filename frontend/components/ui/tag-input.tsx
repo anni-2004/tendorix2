@@ -170,7 +170,7 @@ export const TagInput: React.FC<TagInputProps> = ({
           className="w-[--radix-popover-trigger-width] p-0 max-h-80"
           align="start"
         >
-          <Command shouldFilter={false}>
+          <Command>
             <CommandInput
               placeholder="Search or type to add..."
               value={searchQuery}
@@ -215,10 +215,9 @@ export const TagInput: React.FC<TagInputProps> = ({
                     <CommandItem
                       key={option}
                       value={option}
-                      onSelect={(selectedValue) => {
-                        // Find the original option that matches (case-insensitive)
-                        const originalOption = options.find(opt => opt.toLowerCase() === selectedValue.toLowerCase()) || selectedValue;
-                        handleSelect(originalOption);
+                      onSelect={() => {
+                        // Direct call to handleSelect with the original option
+                        handleSelect(option);
                       }}
                       disabled={disabled || isSelected}
                       className={cn(
