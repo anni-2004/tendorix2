@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { TagInput } from '@/components/ui/tag-input';
+import {TagInput}  from '@/components/ui/tag-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Award } from 'lucide-react';
 
