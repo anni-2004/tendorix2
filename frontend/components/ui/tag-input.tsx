@@ -8,7 +8,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
@@ -45,23 +44,23 @@ export const TagInput: React.FC<TagInputProps> = ({
   disabled,
   className,
   onTagAdd,
-  allowCreate = true,
+  allowCreate = false, // Default to false for dropdown-only
 }) => {
   const [open, setOpen] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState("");
 
   const selectedTags = React.useMemo(() => {
     return value ? value.split(",").map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
   }, [value]);
 
-  const handleSelect = React.useCallback((currentValue: string) => {
-    const trimmedValue = currentValue.trim();
+  const handleSelect = React.useCallback((selectedOption: string) => {
+    const trimmedValue = selectedOption.trim();
     if (!trimmedValue) return;
 
     const newSelectedTags = [...selectedTags];
     const existingIndex = newSelectedTags.findIndex(tag => tag.toLowerCase() === trimmedValue.toLowerCase());
     
     if (existingIndex === -1) {
+      // Add the tag
       newSelectedTags.push(trimmedValue);
       onChange(newSelectedTags.join(", "));
       
@@ -70,7 +69,6 @@ export const TagInput: React.FC<TagInputProps> = ({
       }
     }
 
-    setSearchQuery("");
     setOpen(false);
   }, [selectedTags, onChange, onTagAdd]);
 
@@ -79,49 +77,11 @@ export const TagInput: React.FC<TagInputProps> = ({
     onChange(newSelectedTags.join(", "));
   }, [selectedTags, onChange]);
 
-  const handleKeyDownRemove = (e: React.KeyboardEvent<HTMLSpanElement>, tagToRemove: string) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleRemove(tagToRemove);
-    }
-  };
-
   const availableOptions = React.useMemo(() => {
     return options.filter(option => 
       !selectedTags.some(tag => tag.toLowerCase() === option.toLowerCase())
     );
   }, [options, selectedTags]);
-
-  const filteredOptions = React.useMemo(() => {
-    if (!searchQuery.trim()) return availableOptions;
-    return availableOptions.filter(option =>
-      option.toLowerCase().includes(searchQuery.trim().toLowerCase())
-    );
-  }, [availableOptions, searchQuery]);
-
-  const showCreateOption = React.useMemo(() => {
-    if (!allowCreate) return false;
-    const trimmedSearch = searchQuery.trim();
-    if (!trimmedSearch) return false;
-    const isAlreadySelected = selectedTags.some(tag => tag.toLowerCase() === trimmedSearch.toLowerCase());
-    const isExistingOriginalOption = options.some(opt => opt.toLowerCase() === trimmedSearch.toLowerCase());
-    return !isAlreadySelected && !isExistingOriginalOption;
-  }, [searchQuery, selectedTags, options, allowCreate]);
-
-  // Handle button click to toggle dropdown
-  const handleButtonClick = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!disabled) {
-      setOpen(prev => !prev);
-    }
-  }, [disabled]);
-
-  // Handle command item selection
-  const handleCommandItemSelect = React.useCallback((option: string) => {
-    handleSelect(option);
-  }, [handleSelect]);
 
   return (
     <div className={cn("w-full", className)}>
@@ -142,7 +102,6 @@ export const TagInput: React.FC<TagInputProps> = ({
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
             type="button"
-            onClick={handleButtonClick}
           >
             {selectedTags.length > 0 ? (
               <div className="flex flex-wrap gap-1 max-w-full">
@@ -155,7 +114,6 @@ export const TagInput: React.FC<TagInputProps> = ({
                     <span className="truncate">{tag}</span>
                     <button
                       type="button"
-                      tabIndex={disabled ? -1 : 0}
                       className={cn(
                         "ml-1.5 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2",
                         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-secondary-foreground/20"
@@ -166,7 +124,6 @@ export const TagInput: React.FC<TagInputProps> = ({
                         e.stopPropagation();
                         handleRemove(tag);
                       }}
-                      onKeyDown={disabled ? undefined : (e) => handleKeyDownRemove(e, tag)}
                       disabled={disabled}
                       aria-label={`Remove ${tag}`}
                     >
@@ -188,51 +145,26 @@ export const TagInput: React.FC<TagInputProps> = ({
           sideOffset={4}
         >
           <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Search or type to add..."
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-              disabled={disabled}
-              className="h-9"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) { 
-                  e.preventDefault();
-                  const trimmedSearch = searchQuery.trim();
-                  if (trimmedSearch) {
-                    const isAlreadySelected = selectedTags.some(tag => tag.toLowerCase() === trimmedSearch.toLowerCase());
-                    if (isAlreadySelected) {
-                      setOpen(false);
-                      return;
-                    }
-              
-                    const availableOptionMatch = availableOptions.find(
-                      opt => opt.toLowerCase() === trimmedSearch.toLowerCase()
-                    );
-              
-                    if (availableOptionMatch) {
-                      handleSelect(availableOptionMatch);
-                    } else {
-                      const isExistingInOriginalOptions = options.some(opt => opt.toLowerCase() === trimmedSearch.toLowerCase());
-                      if (allowCreate && !isExistingInOriginalOptions) {
-                        handleSelect(trimmedSearch);
-                      }
-                    }
-                  }
-                }
-              }}
-            />
             <CommandList className="max-h-60 overflow-y-auto">
               <CommandEmpty>
-                {searchQuery.trim() && !showCreateOption ? "No matching items found." : (allowCreate ? "Type to search or add new." : "Type to search.")}
+                {availableOptions.length === 0 ? "All options selected" : "No options available"}
               </CommandEmpty>
               <CommandGroup>
-                {filteredOptions.map(option => {
+                {availableOptions.map(option => {
                   const isSelected = selectedTags.some(tag => tag.toLowerCase() === option.toLowerCase());
                   return (
                     <CommandItem
                       key={option}
                       value={option}
-                      onSelect={() => handleCommandItemSelect(option)}
+                      onSelect={(currentValue) => {
+                        // Find the exact option that matches (case-insensitive)
+                        const exactOption = availableOptions.find(
+                          opt => opt.toLowerCase() === currentValue.toLowerCase()
+                        );
+                        if (exactOption && !disabled) {
+                          handleSelect(exactOption);
+                        }
+                      }}
                       disabled={disabled || isSelected}
                       className={cn(
                         "cursor-pointer hover:bg-accent flex items-center justify-between",
@@ -245,17 +177,6 @@ export const TagInput: React.FC<TagInputProps> = ({
                     </CommandItem>
                   );
                 })}
-                {showCreateOption && searchQuery.trim() && (
-                  <CommandItem
-                    key={`create-${searchQuery.trim()}`}
-                    value={searchQuery.trim()}
-                    onSelect={() => handleCommandItemSelect(searchQuery.trim())}
-                    disabled={disabled}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer data-[selected=true]:bg-accent/90"
-                  >
-                    <span>Add "{searchQuery.trim()}"</span>
-                  </CommandItem>
-                )}
               </CommandGroup>
             </CommandList>
           </Command>
