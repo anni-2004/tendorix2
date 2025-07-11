@@ -2,98 +2,130 @@ from sentence_transformers import SentenceTransformer, util
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def compute_embedding_similarity_list(required_list, provided_list, threshold=0.75):
-    matched, missing = [], []
-    for req in required_list:
-        emb_req = model.encode(req, convert_to_tensor=True)
-        found = False
-        for prov in provided_list:
-            emb_prov = model.encode(prov, convert_to_tensor=True)
-            if util.cos_sim(emb_req, emb_prov).item() >= threshold:
-                matched.append(req)
-                found = True
-                break
-        if not found:
-            missing.append(req)
-    score = len(matched) / len(required_list) if required_list else 1.0
-    return round(score, 2), matched, missing
+def compute_similarity(text1, text2):
+    emb1 = model.encode(text1, convert_to_tensor=True)
+    emb2 = model.encode(text2, convert_to_tensor=True)
+    return float(util.pytorch_cos_sim(emb1, emb2)[0][0])
 
-def compute_tender_match_score(eligibility: dict, company: dict):
-    score, total_weight = 0, 0
-    field_scores, missing_fields = {}, {}
+def compute_tender_match_score(structured_eligibility, company):
+    score = 0
+    total = 0
+    field_scores = {}
+    missing_fields = []
 
-    # PAN check
-    if eligibility.get("pan", {}).get("required"):
-        s = 1 if company.get("pan") else 0
-        field_scores["pan"] = s
-        if s == 0:
-            missing_fields["pan"] = "Missing PAN"
-        score += s * 0.1
-        total_weight += 0.1
+    # Boolean & scalar fields
+    boolean_fields = [
+        ("pan", "pan"),
+        ("gstin", "gstin"),
+        ("registration_on_gem", "registration_on_gem"),
+    ]
+    for tender_field, company_field in boolean_fields:
+        tender_req = structured_eligibility.get(tender_field, {}).get("required", False)
+        company_has = company.get(company_field, False)
+        total += 1
+        if not tender_req or (tender_req and company_has):
+            score += 1
+            field_scores[tender_field] = 1
+        else:
+            field_scores[tender_field] = 0
+            missing_fields.append(tender_field)
 
-    # GSTIN check
-    if eligibility.get("gstin", {}).get("required"):
-        s = 1 if company.get("gstin") else 0
-        field_scores["gstin"] = s
-        if s == 0:
-            missing_fields["gstin"] = "Missing GSTIN"
-        score += s * 0.1
-        total_weight += 0.1
+    # Experience
+    tender_exp = structured_eligibility.get("experience", {})
+    required_exp = tender_exp.get("required", False)
+    min_years = tender_exp.get("minimum_years", 0) or 0
+    company_exp = company.get("experience_years", 0)
+    total += 1
+    if not required_exp or (required_exp and company_exp >= min_years):
+        score += 1
+        field_scores["experience"] = 1
+    else:
+        field_scores["experience"] = 0
+        missing_fields.append("experience")
 
-    # Experience check (safe null fallback)
-    required_exp = eligibility.get("experience", {}).get("minimum_years") or 0
-    try:
-        company_exp = int(company.get("prior_experience", "0").split()[0])
-    except Exception:
-        company_exp = 0
-    s = 1 if company_exp >= required_exp else round(company_exp / required_exp, 2) if required_exp > 0 else 1
-    field_scores["experience"] = s
-    if s < 1:
-        missing_fields["experience"] = f"Required {required_exp}, has {company_exp}"
-    score += s * 0.2
-    total_weight += 0.2
+    # Annual Turnover
+    fin_req = structured_eligibility.get("financial_requirements", {})
+    turnover_req = fin_req.get("annual_turnover_required", False)
+    min_turnover = fin_req.get("minimum_turnover_amount", 0) or 0
+    company_turnover = company.get("annual_turnover", 0)
+    total += 1
+    if not turnover_req or (turnover_req and company_turnover >= min_turnover):
+        score += 1
+        field_scores["financial_requirements"] = 1
+    else:
+        field_scores["financial_requirements"] = 0
+        missing_fields.append("financial_requirements")
 
-    # Documents similarity
-    docs_score, _, miss = compute_embedding_similarity_list(
-        eligibility.get("required_documents", []),
-        company.get("documents_provided", [])
-    )
-    field_scores["documents"] = docs_score
-    if miss:
-        missing_fields["documents"] = miss
-    score += docs_score * 0.2
-    total_weight += 0.2
+    # Blacklisting
+    blacklisting = structured_eligibility.get("blacklisting_or_litigation", {}).get("mentioned", False)
+    total += 1
+    if not blacklisting:
+        score += 1
+        field_scores["blacklisting_or_litigation"] = 1
+    else:
+        field_scores["blacklisting_or_litigation"] = 0
+        missing_fields.append("blacklisting_or_litigation")
 
-    # Certifications similarity
-    certs_score, _, miss = compute_embedding_similarity_list(
-        eligibility.get("certifications", []),
-        company.get("certifications_provided", [])
-    )
-    field_scores["certifications"] = certs_score
-    if miss:
-        missing_fields["certifications"] = miss
-    score += certs_score * 0.2
-    total_weight += 0.2
+    # Required Documents
+    tender_docs = structured_eligibility.get("required_documents", [])
+    company_docs = company.get("documents_available", [])
+    total += 1
+    if not tender_docs:
+        score += 1
+        field_scores["required_documents"] = 1
+    else:
+        matched_docs = sum(
+            1 for tdoc in tender_docs
+            for cdoc in company_docs
+            if compute_similarity(tdoc.lower(), cdoc.lower()) > 0.75
+        )
+        if matched_docs / len(tender_docs) >= 0.7:
+            score += 1
+            field_scores["required_documents"] = 1
+        else:
+            field_scores["required_documents"] = 0
+            missing_fields.append("required_documents")
 
-    # Other criteria (if present)
-    other_text = " ".join(str(v) for v in eligibility.get("other_criteria", {}).values() if v)
-    company_text = company.get("product_service_description", "")
-    if other_text and company_text:
-        sim = util.cos_sim(
-            model.encode(other_text, convert_to_tensor=True),
-            model.encode(company_text, convert_to_tensor=True)
-        ).item()
-        s = round(min(max(sim, 0), 1), 2)
-        field_scores["other_criteria"] = s
-        if s < 0.7:
-            missing_fields["other_criteria"] = "Service description may not match"
-        score += s * 0.2
-        total_weight += 0.2
+    # Certifications
+    tender_certs = structured_eligibility.get("certifications", [])
+    company_certs = company.get("certifications", [])
+    total += 1
+    if not tender_certs:
+        score += 1
+        field_scores["certifications"] = 1
+    else:
+        matched_certs = sum(
+            1 for tcert in tender_certs
+            for ccert in company_certs
+            if compute_similarity(tcert.lower(), ccert.lower()) > 0.75
+        )
+        if matched_certs / len(tender_certs) >= 0.7:
+            score += 1
+            field_scores["certifications"] = 1
+        else:
+            field_scores["certifications"] = 0
+            missing_fields.append("certifications")
 
-    # Final score calculation
-    final_score = round((score / total_weight) * 100, 2) if total_weight else 0
-    eligible = final_score >= 70 and not missing_fields
-    print(final_score)
+    # Other criteria (optional)
+    other_criteria = structured_eligibility.get("other_criteria", {})
+    company_desc = company.get("description", "")
+    total += 1
+    if not other_criteria:
+        score += 1
+        field_scores["other_criteria"] = 1
+    else:
+        criteria_text = " ".join(f"{k}: {v}" for k, v in other_criteria.items())
+        sim = compute_similarity(criteria_text.lower(), company_desc.lower())
+        if sim > 0.7:
+            score += 1
+            field_scores["other_criteria"] = 1
+        else:
+            field_scores["other_criteria"] = 0
+            missing_fields.append("other_criteria")
+
+    final_score = round((score / total) * 100, 2) if total > 0 else 0
+    eligible = final_score >= 70  # Threshold
+
     return {
         "matching_score": final_score,
         "eligible": eligible,

@@ -135,3 +135,32 @@ def map_fields_with_confidence(gemini_fields: list, backend_fields: list, backen
             }
 
     return mapped_data, mapping_details
+from datetime import datetime
+
+def enrich_mapped_data(mapped_data: dict) -> dict:
+    """Split full date fields into components for template use."""
+    # For issue date
+    if "date" in mapped_data:
+        try:
+            dt = datetime.strptime(mapped_data["date"], "%Y-%m-%d")
+            mapped_data["month1"] = dt.strftime("%B")
+            mapped_data["date1"] = str(dt.day)
+            mapped_data["year1"] = str(dt.year)
+        except Exception as e:
+            print(f"⚠️ Failed to parse 'date': {e}")
+    
+    # For expiry date (derived from expiryMonth, expiryDate, expiryYear)
+    try:
+        if "expiryMonth" in mapped_data and "expiryDate" in mapped_data and "expiryYear" in mapped_data:
+            expiry_dt = datetime(
+                int(mapped_data["expiryYear"]),
+                int(mapped_data["expiryMonth"]),
+                int(mapped_data["expiryDate"])
+            )
+            mapped_data["month2"] = expiry_dt.strftime("%B")
+            mapped_data["date2"] = str(expiry_dt.day)
+            mapped_data["year2"] = str(expiry_dt.year)
+    except Exception as e:
+        print(f"⚠️ Failed to parse expiry date: {e}")
+
+    return mapped_data

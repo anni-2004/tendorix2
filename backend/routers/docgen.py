@@ -4,13 +4,13 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from services.template_parser import extract_schema_from_docx
 from services.doc_generator import generate_docx_from_template
-from services.field_mapper import map_fields_by_embedding
+from services.field_mapper import map_fields_by_embedding,enrich_mapped_data
 from routers.auth import get_current_user
 
 router = APIRouter()
 
-TEMPLATE_DIR = "backend/storage/templates"
-OUTPUT_DIR = "backend/storage/output"
+TEMPLATE_DIR = "storage/templates"
+OUTPUT_DIR = "storage/output"
 
 os.makedirs(TEMPLATE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -135,7 +135,7 @@ async def auto_map_fields(
             backend_data=tender_data,
             threshold=0.5  # Adjust threshold as needed
         )
-        
+        mapped_data=enrich_mapped_data(mapped_data)
         # Categorize fields by mapping confidence
         auto_mapped = {}
         needs_review = {}
