@@ -8,20 +8,22 @@
 5. [Database Schema](#database-schema)
 6. [API Reference](#api-reference)
 7. [AI/ML Components](#aiml-components)
-8. [Deployment Guide](#deployment-guide)
-9. [Development Guide](#development-guide)
-10. [Troubleshooting](#troubleshooting)
+8. [TenderDraft Document Generation](#tenderdraft-document-generation)
+9. [Deployment Guide](#deployment-guide)
+10. [Development Guide](#development-guide)
+11. [Troubleshooting](#troubleshooting)
 
 ## System Overview
 
 ### Purpose
-Tendorix is an AI-powered tender matching platform designed to connect companies with relevant tender opportunities using advanced machine learning algorithms and natural language processing.
+Tendorix is a comprehensive AI-powered platform that combines tender matching with intelligent document generation. The platform revolutionizes how companies discover relevant tender opportunities and create professional tender documents using advanced machine learning algorithms and natural language processing.
 
 ### Key Components
 - **Authentication System**: Secure user management with JWT
 - **Profile Management**: Comprehensive company profile creation and editing
 - **AI Matching Engine**: Semantic matching using transformer models
 - **Document Processing**: Automated tender document analysis
+- **TenderDraft**: AI-powered document generation system
 - **Real-time Dashboard**: Interactive user interface for tender management
 
 ### Technology Stack Summary
@@ -31,6 +33,7 @@ Backend: FastAPI + Python + MongoDB
 AI/ML: Azure AI + Gemini AI + HuggingFace Transformers
 Storage: Azure Blob Storage + MongoDB
 Authentication: JWT + bcrypt
+Document Generation: AI-powered template processing
 ```
 
 ## Architecture Deep Dive
@@ -52,6 +55,10 @@ Authentication: JWT + bcrypt
 │  │    Auth     │ │   Profile   │ │   Matching  │           │
 │  │   Service   │ │   Service   │ │   Service   │           │
 │  └─────────────┘ └─────────────┘ └─────────────┘           │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │  TenderDraft│ │   Upload    │ │  Analytics  │           │
+│  │   Service   │ │   Service   │ │   Service   │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -60,8 +67,8 @@ Authentication: JWT + bcrypt
 ├─────────────────────────────────────────────────────────────┤
 │  MongoDB        │  Azure Blob   │  AI Services              │
 │  - Users        │  - Documents  │  - Document Intelligence  │
-│  - Companies    │  - Files      │  - Gemini AI             │
-│  - Tenders      │               │  - HuggingFace           │
+│  - Companies    │  - Templates  │  - Gemini AI             │
+│  - Tenders      │  - Files      │  - HuggingFace           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,7 +91,12 @@ The application follows a modular architecture with clear separation of concerns
    - AI-powered scoring algorithms
    - Results aggregation and ranking
 
-4. **Upload Service** (`backend/routers/upload.py`)
+4. **TenderDraft Service** (`backend/routers/docgen.py`)
+   - Template upload and processing
+   - AI-powered field mapping
+   - Document generation and download
+
+5. **Upload Service** (`backend/routers/upload.py`)
    - Document upload and processing
    - Batch processing capabilities
    - File validation and storage
@@ -105,12 +117,23 @@ The application follows a modular architecture with clear separation of concerns
    - Scoring algorithms
    - Ranking and filtering
 
+4. **Template Processing** (`backend/services/template_parser.py`)
+   - DOCX template parsing
+   - Field extraction and identification
+   - Schema generation
+
+5. **Field Mapping** (`backend/services/field_mapper.py`)
+   - AI-powered field mapping
+   - Confidence scoring
+   - Embedding-based similarity
+
 ## Backend Documentation
 
 ### Project Structure
 ```
 backend/
 ├── main.py                 # FastAPI application entry point
+├── config.py              # Configuration and environment variables
 ├── requirements.txt        # Python dependencies
 ├── core/
 │   ├── database.py        # Database connection and configuration
@@ -123,6 +146,7 @@ backend/
 │   ├── profile.py         # Profile management endpoints
 │   ├── match.py           # Tender matching endpoints
 │   ├── company.py         # Company-related endpoints
+│   ├── docgen.py          # Document generation endpoints
 │   └── upload.py          # File upload endpoints
 ├── services/
 │   ├── basic_filter.py    # Basic filtering logic
@@ -131,10 +155,16 @@ backend/
 │   ├── eligibility_parser.py     # AI text parsing
 │   ├── summarizer.py      # Document summarization
 │   ├── tender_inserter.py # Database operations
-│   └── tender_matcher.py  # Matching algorithms
-└── pipelines/
-    ├── manual_tender_upload.py    # Manual upload pipeline
-    └── run_tender_matching.py     # Matching pipeline
+│   ├── tender_matcher.py  # Matching algorithms
+│   ├── template_parser.py # Template processing
+│   ├── field_mapper.py    # AI field mapping
+│   └── doc_generator.py   # Document generation
+├── pipelines/
+│   ├── manual_tender_upload.py    # Manual upload pipeline
+│   └── run_tender_matching.py     # Matching pipeline
+└── storage/
+    ├── templates/         # Uploaded templates
+    └── output/           # Generated documents
 ```
 
 ### Core Components
@@ -156,6 +186,7 @@ db = client[MONGO_DB_NAME]
 # Collections
 profiles = db.get_collection("companies")
 tenders = db.get_collection("filtered_tenders")
+users = db.get_collection("users")
 ```
 
 #### Authentication System (`routers/auth.py`)
@@ -182,6 +213,19 @@ Validation Rules:
 - Financial information verification
 - Business capability assessment
 - Geographic reach validation
+
+#### TenderDraft System (`routers/docgen.py`)
+Features:
+- Template upload and parsing
+- AI-powered field mapping
+- Document generation
+- Template management
+
+Key Endpoints:
+- `POST /upload-template/`: Upload and parse templates
+- `POST /auto-map-fields/`: AI-powered field mapping
+- `POST /generate-document/`: Generate final documents
+- `GET /tender/{id}`: Fetch tender data
 
 #### Matching Engine (`services/tender_matcher.py`)
 Algorithm Components:
@@ -241,6 +285,24 @@ GET /api/tenders/{tender_id}/summarize
 - Response: { tender_id: string, summary: string }
 ```
 
+#### TenderDraft Endpoints
+```
+POST /api/docgen/upload-template/
+- Headers: Authorization: Bearer <token>
+- Body: FormData with file
+- Response: { templateId: string, schema: object }
+
+POST /api/docgen/auto-map-fields/
+- Headers: Authorization: Bearer <token>
+- Body: FormData with templateId and tenderId
+- Response: { autoMapped: object, needsReview: object, unmapped: object }
+
+POST /api/docgen/generate-document/
+- Headers: Authorization: Bearer <token>
+- Body: FormData with templateId and mappedData
+- Response: File download (DOCX)
+```
+
 ## Frontend Documentation
 
 ### Project Structure
@@ -252,7 +314,8 @@ frontend/
 │   ├── login/page.tsx     # Login page
 │   ├── signup/page.tsx    # Signup page
 │   ├── dashboard/page.tsx # Main dashboard
-│   └── tender-match-pro/page.tsx  # Profile form
+│   ├── tender-match-pro/page.tsx  # Profile form
+│   └── tender-draft/page.tsx      # Document generation
 ├── components/
 │   ├── ui/                # Reusable UI components
 │   └── tender_match_pro/  # Profile form components
@@ -276,12 +339,28 @@ Features:
 - Tender filtering and matching
 - Results visualization
 - Real-time updates
+- TenderDraft access
 
 State Management:
 - User authentication state
 - Profile completion status
 - Tender data and matching results
 - UI state (loading, errors, modals)
+
+#### TenderDraft (`app/tender-draft/page.tsx`)
+Features:
+- Multi-step document generation workflow
+- Template upload and processing
+- AI-powered field mapping
+- Document preview and generation
+- Progress tracking
+
+Workflow Steps:
+1. Template Upload
+2. Data Configuration
+3. AI Auto-Mapping
+4. Review & Edit
+5. Document Generation
 
 #### Registration Wizard (`components/tender_match_pro/registration-wizard.tsx`)
 Features:
@@ -302,10 +381,11 @@ Form Steps:
 
 #### TagInput Component (`components/ui/tag-input.tsx`)
 Features:
-- Multi-select dropdown with search
-- Custom option creation
-- Keyboard navigation
-- Accessibility support
+- Dropdown-only multi-select
+- No text input capability
+- Visual tag representation
+- Easy tag removal
+- Keyboard navigation support
 
 ### State Management
 
@@ -587,6 +667,170 @@ def compute_tender_match_score(eligibility: dict, company: dict):
 - **Features**: Multilingual support, domain adaptation
 - **Output**: Similarity scores and structured data
 
+## TenderDraft Document Generation
+
+### Overview
+TenderDraft is an AI-powered document generation system that automates the creation of professional tender documents by mapping tender data to user-provided templates.
+
+### Architecture
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Template      │    │   AI Field      │    │   Document      │
+│   Upload        │───▶│   Mapping       │───▶│   Generation    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Template      │    │   Confidence    │    │   Quality       │
+│   Parsing       │    │   Scoring       │    │   Validation    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Components
+
+#### Template Parser (`services/template_parser.py`)
+```python
+def extract_schema_from_docx(docx_path):
+    """Extract schema from DOCX template using Gemini AI"""
+    try:
+        template_text = extract_text_from_docx(docx_path)
+        prompt = build_prompt(template_text)
+        response = MODEL.generate_content(prompt)
+        parsed = clean_and_parse_gemini_json(response.text)
+        return parsed
+    except Exception as e:
+        print("❌ Error:", e)
+        return None
+```
+
+Features:
+- DOCX text extraction
+- AI-powered field identification
+- Schema generation
+- Validation and error handling
+
+#### Field Mapper (`services/field_mapper.py`)
+```python
+def map_fields_by_embedding(gemini_fields: list, backend_fields: list, backend_data: dict, threshold: float = 0.5):
+    """
+    Maps template fields to backend data fields using embedding similarity.
+    """
+    mapped_data = {}
+    backend_embeddings = model.encode(backend_fields, convert_to_tensor=True)
+    
+    for field in gemini_fields:
+        query_embedding = model.encode(field['label'], convert_to_tensor=True)
+        cosine_scores = util.cos_sim(query_embedding, backend_embeddings)[0].cpu().numpy()
+        max_score_idx = np.argmax(cosine_scores)
+        max_score = cosine_scores[max_score_idx]
+        
+        if max_score >= threshold:
+            matched_backend_field = backend_fields[max_score_idx]
+            mapped_data[field['id']] = str(backend_data.get(matched_backend_field, ""))
+    
+    return mapped_data
+```
+
+Features:
+- Embedding-based similarity matching
+- Confidence scoring
+- Threshold-based filtering
+- Automatic field mapping
+
+#### Document Generator (`services/doc_generator.py`)
+```python
+def generate_docx_from_template(template_string: str, mapped_data: dict, output_path: str):
+    """Generate a DOCX document from template string and mapped data"""
+    # Replace placeholders with values
+    filled_text = template_string
+    for key, value in mapped_data.items():
+        placeholder = f"{{{key}}}"
+        filled_text = filled_text.replace(placeholder, str(value) if value else "")
+    
+    # Generate DOCX document
+    doc = Document()
+    for line in filled_text.split("\n"):
+        if line.strip():
+            p = doc.add_paragraph()
+            p.add_run(line.strip())
+    
+    doc.save(output_path)
+```
+
+Features:
+- Template placeholder replacement
+- DOCX document generation
+- Formatting preservation
+- Error handling
+
+### Workflow
+
+#### 1. Template Upload
+- User uploads DOCX template
+- System extracts text content
+- AI identifies field placeholders
+- Schema is generated and stored
+
+#### 2. Data Configuration
+- User provides tender ID
+- System fetches tender data
+- Data is prepared for mapping
+
+#### 3. AI Auto-Mapping
+- AI maps template fields to tender data
+- Confidence scores are calculated
+- Results are categorized (auto-mapped, needs review, unmapped)
+
+#### 4. Review & Edit
+- User reviews mapped fields
+- Manual adjustments can be made
+- Preview is generated
+
+#### 5. Document Generation
+- Final document is generated
+- Quality validation is performed
+- Document is available for download
+
+### API Integration
+
+#### Upload Template
+```typescript
+const formData = new FormData();
+formData.append('file', selectedFile);
+
+const response = await fetch("/api/docgen/upload-template/", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${token}` },
+  body: formData,
+});
+```
+
+#### Auto-Map Fields
+```typescript
+const formData = new FormData();
+formData.append('templateId', templateId);
+formData.append('tenderId', tenderId);
+
+const response = await fetch("/api/docgen/auto-map-fields/", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${token}` },
+  body: formData,
+});
+```
+
+#### Generate Document
+```typescript
+const formData = new FormData();
+formData.append('templateId', templateId);
+formData.append('mappedData', JSON.stringify(mappedData));
+
+const response = await fetch("/api/docgen/generate-document/", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${token}` },
+  body: formData,
+});
+```
+
 ## Deployment Guide
 
 ### Docker Deployment
@@ -661,238 +905,13 @@ volumes:
   mongo_data:
 ```
 
-### Cloud Deployment Options
-
-#### AWS Deployment
-```yaml
-# ECS Task Definition
-{
-  "family": "tendorix-backend",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::account:role/ecsTaskExecutionRole",
-  "containerDefinitions": [
-    {
-      "name": "backend",
-      "image": "your-account.dkr.ecr.region.amazonaws.com/tendorix-backend:latest",
-      "portMappings": [
-        {
-          "containerPort": 8000,
-          "protocol": "tcp"
-        }
-      ],
-      "environment": [
-        {
-          "name": "MONGO_URI",
-          "value": "mongodb://your-mongo-cluster"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/tendorix-backend",
-          "awslogs-region": "us-west-2",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
-    }
-  ]
-}
-```
-
-#### Azure Deployment
-```yaml
-# Azure Container Instances
-apiVersion: 2019-12-01
-location: eastus
-name: tendorix-app
-properties:
-  containers:
-  - name: backend
-    properties:
-      image: tendorix/backend:latest
-      ports:
-      - port: 8000
-        protocol: TCP
-      environmentVariables:
-      - name: MONGO_URI
-        value: mongodb://your-cosmos-db
-      resources:
-        requests:
-          cpu: 1.0
-          memoryInGB: 2.0
-  - name: frontend
-    properties:
-      image: tendorix/frontend:latest
-      ports:
-      - port: 3000
-        protocol: TCP
-      resources:
-        requests:
-          cpu: 0.5
-          memoryInGB: 1.0
-  osType: Linux
-  ipAddress:
-    type: Public
-    ports:
-    - protocol: TCP
-      port: 3000
-    - protocol: TCP
-      port: 8000
-```
-
-#### Google Cloud Deployment
-```yaml
-# Cloud Run Service
-apiVersion: serving.knative.dev/v1
-kind: Service
-metadata:
-  name: tendorix-backend
-  annotations:
-    run.googleapis.com/ingress: all
-spec:
-  template:
-    metadata:
-      annotations:
-        autoscaling.knative.dev/maxScale: "100"
-        run.googleapis.com/cpu-throttling: "false"
-    spec:
-      containerConcurrency: 80
-      containers:
-      - image: gcr.io/your-project/tendorix-backend
-        ports:
-        - containerPort: 8000
-        env:
-        - name: MONGO_URI
-          value: mongodb://your-mongo-atlas
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-```
-
-### Kubernetes Deployment
-
-#### Backend Deployment
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: tendorix-backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: tendorix-backend
-  template:
-    metadata:
-      labels:
-        app: tendorix-backend
-    spec:
-      containers:
-      - name: backend
-        image: tendorix/backend:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: MONGO_URI
-          valueFrom:
-            secretKeyRef:
-              name: tendorix-secrets
-              key: mongo-uri
-        - name: SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: tendorix-secrets
-              key: secret-key
-        resources:
-          requests:
-            cpu: 500m
-            memory: 1Gi
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: tendorix-backend-service
-spec:
-  selector:
-    app: tendorix-backend
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
-  type: LoadBalancer
-```
-
-#### Frontend Deployment
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: tendorix-frontend
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: tendorix-frontend
-  template:
-    metadata:
-      labels:
-        app: tendorix-frontend
-    spec:
-      containers:
-      - name: frontend
-        image: tendorix/frontend:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "http://tendorix-backend-service"
-        resources:
-          requests:
-            cpu: 250m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: tendorix-frontend-service
-spec:
-  selector:
-    app: tendorix-frontend
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3000
-  type: LoadBalancer
-```
-
 ### Environment Configuration
 
-#### Production Environment Variables
+#### Required Environment Variables
 ```bash
-# Backend Production Environment
-MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/tender_system
+# Backend Environment
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB_NAME=tender_system
 SECRET_KEY=your-super-secure-production-key
 AZURE_DOC_INTEL_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
 AZURE_DOC_INTEL_KEY=your-production-key
@@ -900,17 +919,9 @@ AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
 GEMINI_API_KEY=your-production-gemini-key
 HF_API_TOKEN=your-production-huggingface-token
 
-# Frontend Production Environment
+# Frontend Environment
 NEXT_PUBLIC_API_URL=https://api.tendorix.com
 ```
-
-#### Security Considerations
-- Use secrets management (AWS Secrets Manager, Azure Key Vault, etc.)
-- Enable HTTPS/TLS encryption
-- Configure proper CORS policies
-- Implement rate limiting
-- Set up monitoring and logging
-- Regular security audits and updates
 
 ## Development Guide
 
@@ -957,9 +968,8 @@ cd ../frontend
 npm install
 
 # Environment configuration
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
-# Edit environment files with your configuration
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
 #### Development Workflow
@@ -1052,154 +1062,6 @@ export const TenderCard: React.FC<TenderCardProps> = ({
 };
 ```
 
-### Testing Strategy
-
-#### Backend Testing
-```python
-# Unit Tests
-import pytest
-from fastapi.testclient import TestClient
-from main import app
-
-client = TestClient(app)
-
-def test_user_registration():
-    response = client.post(
-        "/api/auth/signup",
-        json={"email": "test@example.com", "password": "testpass123"}
-    )
-    assert response.status_code == 200
-    assert "id" in response.json()
-
-def test_tender_matching():
-    # Test matching algorithm
-    pass
-
-# Integration Tests
-def test_full_matching_pipeline():
-    # Test complete workflow from profile creation to matching
-    pass
-```
-
-#### Frontend Testing
-```typescript
-// Component Tests
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TenderCard } from './TenderCard';
-
-describe('TenderCard', () => {
-  const mockTender = {
-    id: '1',
-    title: 'Test Tender',
-    matching_score: 85.5
-  };
-
-  it('renders tender information correctly', () => {
-    render(<TenderCard tender={mockTender} onSelect={jest.fn()} />);
-    
-    expect(screen.getByText('Test Tender')).toBeInTheDocument();
-    expect(screen.getByText('85.5% Match')).toBeInTheDocument();
-  });
-
-  it('calls onSelect when clicked', () => {
-    const mockOnSelect = jest.fn();
-    render(<TenderCard tender={mockTender} onSelect={mockOnSelect} />);
-    
-    fireEvent.click(screen.getByRole('button'));
-    expect(mockOnSelect).toHaveBeenCalledWith(mockTender);
-  });
-});
-
-// E2E Tests
-import { test, expect } from '@playwright/test';
-
-test('complete user journey', async ({ page }) => {
-  // Test full user workflow
-  await page.goto('/');
-  await page.click('text=Sign Up');
-  await page.fill('[placeholder="Email"]', 'test@example.com');
-  await page.fill('[placeholder="Password"]', 'testpass123');
-  await page.click('button:has-text("Create Account")');
-  
-  // Continue testing workflow...
-});
-```
-
-### Performance Optimization
-
-#### Backend Optimization
-```python
-# Database Query Optimization
-from pymongo import ASCENDING, TEXT
-
-# Create indexes for better query performance
-db.companies.create_index([
-    ("businessCapabilities.industrySectors", TEXT),
-    ("businessCapabilities.productServiceKeywords", TEXT)
-])
-
-# Use aggregation pipelines for complex queries
-pipeline = [
-    {"$match": {"business_category": {"$in": company_categories}}},
-    {"$lookup": {
-        "from": "companies",
-        "localField": "matched_companies",
-        "foreignField": "_id",
-        "as": "company_details"
-    }},
-    {"$sort": {"matching_score": -1}},
-    {"$limit": 50}
-]
-
-# Implement caching for frequently accessed data
-from functools import lru_cache
-
-@lru_cache(maxsize=128)
-def get_company_profile(user_id: str):
-    return companies.find_one({"user_id": user_id})
-```
-
-#### Frontend Optimization
-```typescript
-// Component Optimization
-import { memo, useMemo, useCallback } from 'react';
-
-export const TenderList = memo(({ tenders, onTenderSelect }) => {
-  const sortedTenders = useMemo(() => 
-    tenders.sort((a, b) => b.matching_score - a.matching_score),
-    [tenders]
-  );
-
-  const handleTenderSelect = useCallback((tender) => {
-    onTenderSelect(tender);
-  }, [onTenderSelect]);
-
-  return (
-    <div>
-      {sortedTenders.map(tender => (
-        <TenderCard 
-          key={tender.id} 
-          tender={tender} 
-          onSelect={handleTenderSelect}
-        />
-      ))}
-    </div>
-  );
-});
-
-// Data Fetching Optimization
-import { useQuery } from '@tanstack/react-query';
-
-export const useTenderData = (companyId: string) => {
-  return useQuery({
-    queryKey: ['tenders', companyId],
-    queryFn: () => fetchTenders(companyId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
-  });
-};
-```
-
 ## Troubleshooting
 
 ### Common Issues and Solutions
@@ -1219,16 +1081,15 @@ sudo systemctl start mongod
 MONGO_URI=mongodb://localhost:27017/tender_system
 ```
 
-##### API Key Configuration
+##### AI Service Configuration
 ```bash
-# Issue: Azure AI Document Intelligence authentication failed
+# Issue: Gemini AI authentication failed
 # Solution: Verify environment variables
-echo $AZURE_DOC_INTEL_ENDPOINT
-echo $AZURE_DOC_INTEL_KEY
+echo $GEMINI_API_KEY
 
-# Check key format and permissions
-curl -H "Ocp-Apim-Subscription-Key: $AZURE_DOC_INTEL_KEY" \
-     "$AZURE_DOC_INTEL_ENDPOINT/documentintelligence/documentModels/prebuilt-layout"
+# Check API key validity
+curl -H "Authorization: Bearer $GEMINI_API_KEY" \
+     "https://generativelanguage.googleapis.com/v1/models"
 ```
 
 ##### Import Errors
@@ -1278,55 +1139,68 @@ app.add_middleware(
 console.log(process.env.NEXT_PUBLIC_API_URL);
 ```
 
-##### Form Validation Issues
+##### TagInput Component Issues
 ```typescript
-// Issue: Form not submitting
-// Solution: Check validation schema
-const result = registrationSchema.safeParse(formData);
-if (!result.success) {
-  console.log(result.error.issues);
-}
+// Issue: Dropdown selection not working
+// Solution: Check event handling and Command component integration
 
-// Check form state
-console.log(form.formState.errors);
-console.log(form.formState.isValid);
+// Ensure proper onSelect handling
+<CommandItem
+  onSelect={() => handleSelect(option)}
+  className="cursor-pointer"
+>
+  {option}
+</CommandItem>
+
+// Verify state updates
+const handleSelect = (option: string) => {
+  const newTags = [...selectedTags, option];
+  onChange(newTags.join(", "));
+  setOpen(false);
+};
 ```
 
-#### Deployment Issues
+#### TenderDraft Issues
 
-##### Docker Build Problems
-```dockerfile
-# Issue: Docker build fails
-# Solution: Check Dockerfile syntax and dependencies
-
-# Multi-stage build for optimization
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
-FROM node:18-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-##### Environment Variable Issues
+##### Template Upload Problems
 ```bash
-# Issue: Environment variables not loaded
-# Solution: Check variable names and values
+# Issue: Template parsing fails
+# Solution: Check file format and content
 
-# List all environment variables
-printenv | grep TENDORIX
+# Verify DOCX format
+file template.docx
 
-# Check Docker environment
-docker exec -it container_name printenv
+# Check file size (max 10MB)
+ls -lh template.docx
 
-# Verify Kubernetes secrets
-kubectl get secrets tendorix-secrets -o yaml
+# Validate template content
+python -c "
+from docx import Document
+doc = Document('template.docx')
+for p in doc.paragraphs:
+    print(p.text)
+"
+```
+
+##### Field Mapping Issues
+```python
+# Issue: Low mapping accuracy
+# Solution: Check embedding model and threshold
+
+# Verify model loading
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Test similarity computation
+import numpy as np
+from sentence_transformers import util
+
+text1 = "Company Name"
+text2 = "Business Name"
+emb1 = model.encode(text1)
+emb2 = model.encode(text2)
+similarity = util.cos_sim(emb1, emb2)
+print(f"Similarity: {similarity}")
 ```
 
 ### Performance Issues
@@ -1344,20 +1218,17 @@ db.filtered_tenders.find({ "business_category": "Technology" }).explain("executi
 
 #### Memory Issues
 ```python
-# Issue: High memory usage
-# Solution: Implement pagination and streaming
+# Issue: High memory usage during AI processing
+# Solution: Implement batch processing and memory management
 
+import gc
 from typing import Generator
 
-def stream_tenders(batch_size: int = 100) -> Generator[dict, None, None]:
-    skip = 0
-    while True:
-        batch = list(tenders.find().skip(skip).limit(batch_size))
-        if not batch:
-            break
-        for tender in batch:
-            yield tender
-        skip += batch_size
+def process_tenders_in_batches(tenders: list, batch_size: int = 10) -> Generator:
+    for i in range(0, len(tenders), batch_size):
+        batch = tenders[i:i + batch_size]
+        yield batch
+        gc.collect()  # Force garbage collection
 ```
 
 ### Monitoring and Logging
@@ -1403,13 +1274,18 @@ def health_check():
         # Check database connection
         db.command("ping")
         
-        # Check external services
-        # ... additional checks
+        # Check AI services
+        model = SentenceTransformer("all-MiniLM-L6-v2")
         
         return {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
-            "version": "1.0.0"
+            "version": "2.0.0",
+            "services": {
+                "database": "connected",
+                "ai_models": "loaded",
+                "storage": "available"
+            }
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -1433,8 +1309,14 @@ def health_check():
 - **Next.js Documentation**: https://nextjs.org/docs
 - **MongoDB Documentation**: https://docs.mongodb.com/
 - **Azure AI Documentation**: https://docs.microsoft.com/azure/cognitive-services/
+- **Google Gemini Documentation**: https://ai.google.dev/docs
+- **HuggingFace Documentation**: https://huggingface.co/docs
 - **Docker Documentation**: https://docs.docker.com/
 
 ---
 
 This documentation is continuously updated. For the latest version, please check our [GitHub repository](https://github.com/your-username/tendorix).
+
+**Current Version**: 2.0 (January 2025)
+**Implementation Status**: 85% Complete
+**Key Features**: Core platform, tender matching, and TenderDraft document generation fully implemented
