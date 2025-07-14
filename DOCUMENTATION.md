@@ -301,6 +301,33 @@ POST /api/docgen/generate-document/
 - Headers: Authorization: Bearer <token>
 - Body: FormData with templateId and mappedData
 - Response: File download (DOCX)
+
+GET /api/docgen/tender/{tender_id}
+- Headers: Authorization: Bearer <token>
+- Response: Tender data object
+
+GET /api/docgen/tenders/
+- Headers: Authorization: Bearer <token>
+- Query: limit, skip
+- Response: Paginated tender list
+
+GET /api/docgen/tender/{tender_id}/fields
+- Headers: Authorization: Bearer <token>
+- Response: Available fields for tender
+```
+
+#### Upload Endpoints
+```
+POST /api/upload/process-tender
+- Body: FormData with form_url and company_id
+- Response: HTML with processing results
+
+POST /api/upload/batch-process-tenders
+- Body: FormData with company_id
+- Response: JSON with batch processing results
+
+GET /api/upload/upload-test
+- Response: HTML test interface
 ```
 
 ## Frontend Documentation
@@ -311,6 +338,7 @@ frontend/
 ├── app/
 │   ├── layout.tsx         # Root layout component
 │   ├── page.tsx           # Home page with auth redirect
+│   ├── globals.css        # Global styles and Tailwind CSS
 │   ├── login/page.tsx     # Login page
 │   ├── signup/page.tsx    # Signup page
 │   ├── dashboard/page.tsx # Main dashboard
@@ -318,13 +346,44 @@ frontend/
 │   └── tender-draft/page.tsx      # Document generation
 ├── components/
 │   ├── ui/                # Reusable UI components
+│   │   ├── tag-input.tsx  # Enhanced dropdown-only multi-select
+│   │   ├── button.tsx     # Button component
+│   │   ├── card.tsx       # Card component
+│   │   ├── form.tsx       # Form components
+│   │   ├── input.tsx      # Input component
+│   │   ├── select.tsx     # Select component
+│   │   ├── progress.tsx   # Progress bar
+│   │   ├── alert.tsx      # Alert component
+│   │   ├── badge.tsx      # Badge component
+│   │   ├── dialog.tsx     # Dialog/Modal component
+│   │   ├── popover.tsx    # Popover component
+│   │   ├── command.tsx    # Command palette
+│   │   ├── checkbox.tsx   # Checkbox component
+│   │   ├── radio-group.tsx # Radio group
+│   │   ├── textarea.tsx   # Textarea component
+│   │   ├── separator.tsx  # Separator line
+│   │   ├── tabs.tsx       # Tabs component
+│   │   ├── toast.tsx      # Toast notifications
+│   │   └── toaster.tsx    # Toast container
 │   └── tender_match_pro/  # Profile form components
+│       ├── registration-wizard.tsx    # Main wizard
+│       ├── form-navigation.tsx        # Navigation component
+│       └── steps/                     # Individual form steps
+│           ├── company-details-step.tsx
+│           ├── business-capabilities-step.tsx
+│           ├── financial-info-step.tsx
+│           ├── tender-experience-step.tsx
+│           ├── geographic-reach-step.tsx
+│           ├── terms-conditions-step.tsx
+│           ├── declarations-uploads-step.tsx
+│           └── review-submit-step.tsx
 ├── hooks/
 │   ├── use-form-persistence.ts  # Form data persistence
 │   ├── use-mobile.tsx     # Mobile detection
 │   └── use-toast.ts       # Toast notifications
 ├── lib/
 │   ├── schemas/           # Zod validation schemas
+│   │   └── registration-schema.ts
 │   ├── utils.ts           # Utility functions
 │   └── api.ts             # API client functions
 └── styles/
@@ -335,17 +394,19 @@ frontend/
 
 #### Dashboard (`app/dashboard/page.tsx`)
 Features:
-- Profile status detection
+- Profile status detection with hydration safety
 - Tender filtering and matching
 - Results visualization
 - Real-time updates
 - TenderDraft access
+- Mobile-responsive design
 
 State Management:
 - User authentication state
 - Profile completion status
 - Tender data and matching results
 - UI state (loading, errors, modals)
+- Client-side mounting protection
 
 #### TenderDraft (`app/tender-draft/page.tsx`)
 Features:
@@ -354,6 +415,7 @@ Features:
 - AI-powered field mapping
 - Document preview and generation
 - Progress tracking
+- Error handling and validation
 
 Workflow Steps:
 1. Template Upload
@@ -365,9 +427,11 @@ Workflow Steps:
 #### Registration Wizard (`components/tender_match_pro/registration-wizard.tsx`)
 Features:
 - Multi-step form with validation
-- Auto-save functionality
+- Auto-save functionality with hydration safety
 - Progress tracking
 - Data persistence
+- Existing profile loading
+- Form state management
 
 Form Steps:
 1. Company Details
@@ -380,34 +444,54 @@ Form Steps:
 8. Review & Submit
 
 #### TagInput Component (`components/ui/tag-input.tsx`)
-Features:
-- Dropdown-only multi-select
-- No text input capability
-- Visual tag representation
-- Easy tag removal
-- Keyboard navigation support
+**Enhanced Features**:
+- **Dropdown-only multi-select** - No text input capability
+- **Improved click handling** - Fixed button and option selection
+- **Enhanced z-index management** - Proper layering above other elements
+- **Visual tag representation** - Clean tag display with removal
+- **Keyboard navigation support** - Arrow keys and Enter
+- **Search functionality** - Type to filter options
+- **Create new options** - Add custom options when typing
+- **Accessibility support** - ARIA labels and screen reader compatibility
+
+**Recent Fixes**:
+- Fixed dropdown click issues with proper event handling
+- Enhanced z-index to `z-[200]` for proper layering
+- Improved command item interactivity
+- Added proper hover states and visual feedback
+- Fixed popover positioning and alignment
 
 ### State Management
 
 #### Form Persistence Hook (`hooks/use-form-persistence.ts`)
+**Enhanced with Hydration Safety**:
 ```typescript
 export function useFormPersistence<T extends FieldValues>(
   form: UseFormReturn<T>,
   storageKey: string,
   initialDefaultValues: T
 ) {
-  // Automatically saves form data to localStorage
-  // Restores data on component mount
-  // Clears data on successful submission
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Only access localStorage after component mounts
+  const loadFromStorage = useCallback(() => {
+    if (!isMounted) return;
+    // localStorage operations...
+  }, [isMounted, /* other deps */]);
 }
 ```
 
 #### Authentication Flow
 1. User visits application
-2. Check for existing JWT token
+2. Check for existing JWT token (client-side only)
 3. Validate token with backend
 4. Redirect to appropriate page (login/dashboard)
 5. Maintain session state throughout application
+6. Handle hydration mismatches gracefully
 
 ### Validation Schemas (`lib/schemas/registration-schema.ts`)
 
@@ -416,12 +500,12 @@ export function useFormPersistence<T extends FieldValues>(
 export const companyDetailsSchema = z.object({
   companyName: z.string().min(2),
   companyType: z.string().min(1),
-  dateOfEstablishment: z.date(),
+  dateOfEstablishment: z.date().nullable(),
   country: z.string().min(2),
   state: z.string().min(2),
   city: z.string().min(2),
   address: z.string().min(5),
-  websiteUrl: z.string().url().optional()
+  websiteUrl: z.string().url().optional().or(z.literal(''))
 });
 ```
 
@@ -437,6 +521,70 @@ export const businessCapabilitiesSchema = z.object({
 }).superRefine((data, ctx) => {
   // Custom validation logic for certifications
 });
+```
+
+### CSS and Styling (`app/globals.css`)
+
+#### Tailwind Configuration
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    /* Complete CSS custom properties */
+  }
+}
+```
+
+#### TagInput Specific Fixes
+```css
+/* Fix for TagInput dropdown z-index issues */
+[data-radix-popper-content-wrapper] {
+  z-index: 200 !important;
+}
+
+/* Ensure command items are clickable */
+[cmdk-item] {
+  cursor: pointer !important;
+}
+
+[cmdk-item]:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+/* Fix for popover positioning */
+.tag-input-popover {
+  z-index: 200;
+  position: relative;
+}
+```
+
+#### Hydration Safety
+```css
+/* Prevent layout shift during hydration */
+.hydration-safe {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Loading states */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+body {
+  /* Prevent hydration flash */
+  opacity: 1;
+}
 ```
 
 ## Database Schema
@@ -621,10 +769,10 @@ Extraction Categories:
 ```python
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def compute_embedding_similarity_list(required_list, provided_list, threshold=0.75):
-    # Computes semantic similarity between requirements and capabilities
-    # Uses cosine similarity for matching
-    # Returns matched items and missing requirements
+def compute_similarity(text1, text2):
+    emb1 = model.encode(text1, convert_to_tensor=True)
+    emb2 = model.encode(text2, convert_to_tensor=True)
+    return float(util.pytorch_cos_sim(emb1, emb2)[0][0])
 ```
 
 #### Scoring Algorithm
@@ -710,6 +858,7 @@ Features:
 - Validation and error handling
 
 #### Field Mapper (`services/field_mapper.py`)
+**Enhanced with Confidence Scoring**:
 ```python
 def map_fields_by_embedding(gemini_fields: list, backend_fields: list, backend_data: dict, threshold: float = 0.5):
     """
@@ -729,6 +878,20 @@ def map_fields_by_embedding(gemini_fields: list, backend_fields: list, backend_d
             mapped_data[field['id']] = str(backend_data.get(matched_backend_field, ""))
     
     return mapped_data
+
+def enrich_mapped_data(mapped_data: dict) -> dict:
+    """Split full date fields into components for template use."""
+    # Enhanced date processing for template compatibility
+    if "date" in mapped_data:
+        try:
+            dt = datetime.strptime(mapped_data["date"], "%Y-%m-%d")
+            mapped_data["month1"] = dt.strftime("%B")
+            mapped_data["date1"] = str(dt.day)
+            mapped_data["year1"] = str(dt.year)
+        except Exception as e:
+            print(f"⚠️ Failed to parse 'date': {e}")
+    
+    return mapped_data
 ```
 
 Features:
@@ -736,6 +899,7 @@ Features:
 - Confidence scoring
 - Threshold-based filtering
 - Automatic field mapping
+- Date field enrichment
 
 #### Document Generator (`services/doc_generator.py`)
 ```python
@@ -773,7 +937,7 @@ Features:
 
 #### 2. Data Configuration
 - User provides tender ID
-- System fetches tender data
+- System fetches tender data (or uses mock data)
 - Data is prepared for mapping
 
 #### 3. AI Auto-Mapping
@@ -1066,6 +1230,68 @@ export const TenderCard: React.FC<TenderCardProps> = ({
 
 ### Common Issues and Solutions
 
+#### Frontend Issues
+
+##### Hydration Errors
+```bash
+# Issue: Hydration mismatch between server and client
+# Solution: Implement client-side mounting protection
+
+const [isMounted, setIsMounted] = useState(false);
+
+useEffect(() => {
+  setIsMounted(true);
+}, []);
+
+if (!isMounted) {
+  return null; // or loading state
+}
+```
+
+##### TagInput Dropdown Issues
+```typescript
+// Issue: Dropdown not clickable or not opening
+// Solution: Enhanced event handling and z-index management
+
+const handleButtonClick = (e: React.MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setOpen(!open);
+};
+
+// CSS fix for z-index
+[data-radix-popper-content-wrapper] {
+  z-index: 200 !important;
+}
+```
+
+##### Missing CSS File
+```bash
+# Issue: Module not found: Can't resolve './globals.css'
+# Solution: Ensure globals.css exists in app directory
+
+# Check if file exists
+ls frontend/app/globals.css
+
+# If missing, create with Tailwind directives
+echo "@tailwind base;
+@tailwind components;
+@tailwind utilities;" > frontend/app/globals.css
+```
+
+##### Missing Dependencies
+```bash
+# Issue: Cannot find module 'critters'
+# Solution: Install missing dependencies
+
+cd frontend
+npm install critters --save-dev
+
+# Clean build cache
+rm -rf .next
+npm run dev
+```
+
 #### Backend Issues
 
 ##### Database Connection Problems
@@ -1105,59 +1331,6 @@ pip install -r requirements.txt
 # Check Python path
 import sys
 print(sys.path)
-```
-
-#### Frontend Issues
-
-##### Build Errors
-```bash
-# Issue: TypeScript compilation errors
-# Solution: Check type definitions
-npm run type-check
-
-# Update dependencies
-npm update
-
-# Clear cache and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-##### API Connection Issues
-```typescript
-// Issue: CORS errors
-// Solution: Check backend CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-// Check environment variables
-console.log(process.env.NEXT_PUBLIC_API_URL);
-```
-
-##### TagInput Component Issues
-```typescript
-// Issue: Dropdown selection not working
-// Solution: Check event handling and Command component integration
-
-// Ensure proper onSelect handling
-<CommandItem
-  onSelect={() => handleSelect(option)}
-  className="cursor-pointer"
->
-  {option}
-</CommandItem>
-
-// Verify state updates
-const handleSelect = (option: string) => {
-  const newTags = [...selectedTags, option];
-  onChange(newTags.join(", "));
-  setOpen(false);
-};
 ```
 
 #### TenderDraft Issues
@@ -1203,7 +1376,7 @@ similarity = util.cos_sim(emb1, emb2)
 print(f"Similarity: {similarity}")
 ```
 
-### Performance Issues
+###  Performance Issues
 
 #### Database Performance
 ```javascript
@@ -1213,7 +1386,7 @@ db.filtered_tenders.createIndex({ "business_category": 1, "location": 1 })
 db.companies.createIndex({ "businessCapabilities.industrySectors": "text" })
 
 // Monitor query performance
-db.filtered_tenders.find({ "business_category": "Technology" }).explain("executionStats")
+db.filtered_tenders.find({ "business_category": "Technology" }).explain("execution Stats")
 ```
 
 #### Memory Issues
@@ -1287,7 +1460,7 @@ def health_check():
                 "storage": "available"
             }
         }
-    except Exception as e:
+    except Exception as e: 
         logger.error(f"Health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -1296,12 +1469,38 @@ def health_check():
         }
 ```
 
+### Recent Fixes and Improvements
+
+#### Hydration Error Resolution
+- Implemented client-side mounting protection across all components
+- Added `isMounted` state to prevent server-client mismatches
+- Enhanced `useFormPersistence` hook with hydration safety
+- Updated Next.js configuration for better hydration handling
+
+#### TagInput Component Enhancement
+- Fixed dropdown click issues with proper event handling
+- Enhanced z-index management for proper layering
+- Improved command item interactivity and hover states
+- Added comprehensive CSS fixes for dropdown functionality
+
+#### CSS and Styling Improvements
+- Created complete `globals.css` file with Tail wind configuration
+- Added CSS custom properties for theming
+- Implemented TagInput-specific fixes
+- Enhanced responsive design and accessibility
+
+#### Build and Dependency Fixes
+- Resolved missing `critters` dependency issue
+- Fixed module resolution problems
+- Enhanced Next.js configuration for production builds
+- Improved error handling and validation
+
 ### Support and Resources
 
 #### Getting Help
 - **Documentation**: This comprehensive guide
 - **GitHub Issues**: Report bugs and request features
-- **Community Forum**: Ask questions and share solutions
+-  **Community Forum**: Ask questions and share solutions
 - **Email Support**: technical-support@tendorix.com
 
 #### Useful Resources
@@ -1317,6 +1516,7 @@ def health_check():
 
 This documentation is continuously updated. For the latest version, please check our [GitHub repository](https://github.com/your-username/tendorix).
 
-**Current Version**: 2.0 (January 2025)
-**Implementation Status**: 85% Complete
-**Key Features**: Core platform, tender matching, and TenderDraft document generation fully implemented
+**Current Version**: 2.1 (January 2025)
+**Implementation Status**: 90% Complete
+**Key Features**: Core platform, tender matching, TenderDraft document generation, and enhanced UI components fully implemented
+**Recent Updates**: Hydration error fixes, TagInput enhancements, CSS improvements, and build optimizations
